@@ -10,6 +10,9 @@ set(AVND_FOLDER "${3RDPARTY_FOLDER}/avendish")
 
 add_library(score_addon_pico
 
+  Pico/DeviceGraph.hpp
+  Pico/DeviceGraph.cpp
+
   score_addon_pico.hpp
   score_addon_pico.cpp
 )
@@ -78,6 +81,13 @@ avnd_add_score_plugin(
   NAMESPACE avnd::blocks
 )
 
+avnd_add_score_plugin(
+  BASE_TARGET score_addon_pico
+  SOURCES "${AVND_FOLDER}/examples/Advanced/Utilities/Automation.hpp"
+  TARGET automation
+  MAIN_CLASS Automation
+  NAMESPACE ao
+)
 
  file(CONFIGURE OUTPUT
       "${CMAKE_BINARY_DIR}/include.pico.cpp"
