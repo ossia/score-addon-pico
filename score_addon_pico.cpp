@@ -1,120 +1,21 @@
 #include "score_addon_pico.hpp"
 
-#include <Engine/ApplicationPlugin.hpp>
-#include <Execution/BaseScenarioComponent.hpp>
-
 #include <score/plugins/FactorySetup.hpp>
 #include <score/plugins/application/GUIApplicationPlugin.hpp>
 #include <score/plugins/documentdelegate/plugin/DocumentPluginBase.hpp>
 
 #include <Avnd/Factories.hpp>
-#include <Pico/DeviceGraph.hpp>
-#include <Scenario/Document/Interval/IntervalExecution.hpp>
-#include <Scenario/Document/ScenarioDocument/ScenarioDocumentModel.hpp>
-#include <Scenario/Execution/ScenarioExecution.hpp>
-#include <Scenario/Process/ScenarioExecution.hpp>
+#include <Pico/ApplicationPlugin.hpp>
 
 // clang-format off
 #include <Avnd/Factories.hpp>
-#include "include.pico.cpp"
+#include "include.score_addon_pico.cpp"
 // clang-format on
-#include <score/plugins/documentdelegate/plugin/DocumentPluginCreator.hpp>
 
 #include <score_plugin_engine.hpp>
 /**
  * This file instantiates the classes that are provided by this plug-in.
  */
-namespace Pico
-{
-
-using Group = QString;
-class Pruner
-{
-public:
-  const score::DocumentContext& context;
-  Devices devices;
-  explicit Pruner(const score::DocumentContext& doc)
-      : context{doc}
-  {
-  }
-
-  void operator()(
-      const Execution::Context& ctx,
-      Execution::BaseScenarioElement& scenar) noexcept
-  {
-    devices.clear();
-    (*this)(scenar.baseInterval(), {});
-    for (auto& device : devices)
-    {
-      qDebug() << "Device: " << device.first << ": "
-               << device.second.processes.size();
-      device.second.name = device.first;
-      device.second.ios.push_back(DeviceIO{
-          .direction = DeviceIO::Input, .type = DeviceIO::GPIO, .pin = 0});
-      device.second.ios.push_back(DeviceIO{
-          .direction = DeviceIO::Output, .type = DeviceIO::GPIO, .pin = 1});
-      device.second.processGraph(ctx.doc);
-    }
-  }
-
-  void operator()(Execution::IntervalComponent& cst, QString group)
-  {
-    if (const auto& label = cst.interval().metadata().getLabel();
-        label.contains("pico"))
-      group = label;
-
-    for (auto& proc : cst.processes())
-    {
-      if (auto scenar_scan
-          = qobject_cast<Execution::ScenarioComponentBase*>(proc.second.get()))
-      {
-        for (auto& itv : scenar_scan->intervals())
-        {
-          (*this)(*itv.second, group);
-        }
-      }
-      else
-      {
-        (*this)(*proc.second, group);
-      }
-    }
-  }
-
-  void operator()(Execution::ProcessComponent& comp, QString group)
-  {
-    // Check where this process executes - for now we just use the label of the parent interval
-    devices[group].processes.push_back(&comp.process());
-  }
-};
-
-class DocPlug : public score::DocumentPlugin
-{
-public:
-  DocPlug(const score::DocumentContext& doc, QObject* parent)
-      : score::DocumentPlugin{doc, "RemoteControl::DocumentPlugin", parent}
-  {
-    auto& plug
-        = m_context.app.guiApplicationPlugin<Engine::ApplicationPlugin>();
-    plug.execution().register_execution_filter(Pruner{doc});
-  }
-
-  ~DocPlug() { }
-
-  void play() { }
-};
-
-class AppPlug : public score::GUIApplicationPlugin
-{
-public:
-  using GUIApplicationPlugin::GUIApplicationPlugin;
-
-  void on_createdDocument(score::Document& doc) override
-  {
-    score::addDocumentPlugin<DocPlug>(doc);
-  }
-};
-
-}
 
 /**
  * 1/ Execution filter that finds all the nodes that talk to
@@ -173,6 +74,7 @@ score_addon_pico::~score_addon_pico() = default;
 score::GUIApplicationPlugin* score_addon_pico::make_guiApplicationPlugin(
     const score::GUIApplicationContext& app)
 {
+  return nullptr;
   return new Pico::AppPlug{app};
 }
 std::vector<std::unique_ptr<score::InterfaceBase>> score_addon_pico::factories(

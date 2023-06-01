@@ -1,99 +1,74 @@
 cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 
+return()
 if(NOT TARGET score_lib_base)
   include("${SCORE_SOURCE_DIR}/cmake/ScoreExternalAddon.cmake")
 endif()
+include(ScoreAvndHelper)
 
 project(score_addon_pico LANGUAGES CXX)
 
 set(AVND_FOLDER "${3RDPARTY_FOLDER}/avendish")
 
 add_library(score_addon_pico
-
+  Pico/ApplicationPlugin.hpp
+  Pico/ApplicationPlugin.cpp
+  Pico/DeviceIO.hpp
+  Pico/DeviceIO.cpp
   Pico/DeviceGraph.hpp
   Pico/DeviceGraph.cpp
+  Pico/SourcePrinter.hpp
+  Pico/SourcePrinter.cpp
+  Pico/LibossiaGenerator.hpp
+  Pico/LibossiaGenerator.cpp
 
   score_addon_pico.hpp
   score_addon_pico.cpp
 )
 
-set(AVND_ADDITIONAL_CLASSES)
-set(AVND_CUSTOM_FACTORIES)
-function(avnd_add_score_plugin)
+avnd_score_plugin_init(BASE_TARGET score_addon_pico)
 
-  cmake_parse_arguments(AVND "" "TARGET;MAIN_CLASS;NAMESPACE;BASE_TARGET" "SOURCES" ${ARGN})
-
-  if(AVND_NAMESPACE)
-    set(AVND_QUALIFIED "${AVND_NAMESPACE}::${AVND_MAIN_CLASS}")
-  else()
-    set(AVND_QUALIFIED "${AVND_MAIN_CLASS}")
-  endif()
-
-  list(GET AVND_SOURCES 0 AVND_MAIN_FILE)
-
-#   if(TARGET avnd_source_parser)
-#     set(AVND_REFLECTION_HELPERS_PRE "${CMAKE_BINARY_DIR}/${AVND_TARGET}_avnd.refl.pre.hpp")
-#     set(AVND_REFLECTION_HELPERS "${CMAKE_BINARY_DIR}/${AVND_TARGET}_avnd.refl.hpp")
-#     add_custom_command(
-#       OUTPUT "${AVND_REFLECTION_HELPERS}"
-#       COMMAND avnd_source_parser "${AVND_QUALIFIED}" "${AVND_MAIN_FILE}" "${AVND_REFLECTION_HELPERS}"
-#       DEPENDS avnd_source_parser
-#     )
-#   endif()
-
-  configure_file(
-    "${CMAKE_SOURCE_DIR}/src/plugins/score-plugin-avnd/prototype.cpp.in"
-    "${CMAKE_BINARY_DIR}/${AVND_TARGET}_avnd.cpp"
-    @ONLY
-    NEWLINE_STYLE LF
+macro(add_math_process FuncName)
+  string(TOLOWER "${FuncName}" SmallFuncName)
+  avnd_score_plugin_add(
+    BASE_TARGET score_addon_pico
+    SOURCES "${AVND_FOLDER}/examples/Advanced/Utilities/Logic.hpp"
+    TARGET avnd_blocks_${SmallFuncName}
+    MAIN_CLASS ${FuncName}
+    NAMESPACE avnd::blocks
   )
+endmacro()
 
-  target_sources(${AVND_BASE_TARGET} PRIVATE
-    ${AVND_SOURCES}
-    "${CMAKE_BINARY_DIR}/${AVND_TARGET}_avnd.cpp"
-  )
+add_math_process(Abs)
+add_math_process(Sin)
+add_math_process(Cos)
+add_math_process(Floor)
+add_math_process(Trunc)
+add_math_process(Round)
+add_math_process(Modulo)
+add_math_process(Min)
+add_math_process(Max)
+add_math_process(Lerp)
+add_math_process(Clamp)
+add_math_process(Equal)
+add_math_process(Different)
+add_math_process(Greater)
+add_math_process(GreaterEqual)
+add_math_process(Lesser)
+add_math_process(LesserEqual)
 
-  if(TARGET avnd_source_parser)
-    target_sources(${AVND_BASE_TARGET} PRIVATE
-      "${AVND_REFLECTION_HELPERS}"
-    )
-    target_compile_definitions(${AVND_BASE_TARGET} PRIVATE AVND_USE_TUPLET_TUPLE=1)
-  endif()
-
-  if(AVND_NAMESPACE)
-    set(txt "namespace ${AVND_NAMESPACE} { struct ${AVND_MAIN_CLASS}; } \n")
-    set(txtf "::oscr::custom_factories<${AVND_NAMESPACE}::${AVND_MAIN_CLASS}>(fx, ctx, key); \n")
-  else()
-    set(txt "struct ${AVND_MAIN_CLASS}; \n")
-    set(txtf "::oscr::custom_factories<${AVND_MAIN_CLASS}>(fx, ctx, key); \n")
-  endif()
-
-  set(AVND_ADDITIONAL_CLASSES "${AVND_ADDITIONAL_CLASSES}\n${txt}\n" PARENT_SCOPE)
-  set(AVND_CUSTOM_FACTORIES "${AVND_CUSTOM_FACTORIES}\n${txtf}\n" PARENT_SCOPE)
-endfunction()
-
-
-avnd_add_score_plugin(
+add_math_process(Spigot)
+add_math_process(Choice)
+#
+# avnd_score_plugin_add(
+#   BASE_TARGET score_addon_pico
+#   SOURCES "${AVND_FOLDER}/examples/Advanced/Utilities/Automation.hpp"
+#   TARGET automation
+#   MAIN_CLASS Automation
+#   NAMESPACE ao
+# )
+#
+avnd_score_plugin_finalize(
   BASE_TARGET score_addon_pico
-  SOURCES "${AVND_FOLDER}/examples/Advanced/Utilities/Math.hpp"
-  TARGET avnd_blocks_sin
-  MAIN_CLASS Sin
-  NAMESPACE avnd::blocks
+  CUSTOM_PLUGIN
 )
-
-avnd_add_score_plugin(
-  BASE_TARGET score_addon_pico
-  SOURCES "${AVND_FOLDER}/examples/Advanced/Utilities/Automation.hpp"
-  TARGET automation
-  MAIN_CLASS Automation
-  NAMESPACE ao
-)
-
- file(CONFIGURE OUTPUT
-      "${CMAKE_BINARY_DIR}/include.pico.cpp"
-      CONTENT "${AVND_ADDITIONAL_CLASSES}\nvoid all_custom_factories(auto& fx, auto& ctx, auto& key) { ${AVND_CUSTOM_FACTORIES} }\n"
-      NEWLINE_STYLE LF)
-
-setup_score_plugin(score_addon_pico)
-
-target_link_libraries(score_addon_pico PUBLIC score_plugin_engine score_plugin_avnd)
