@@ -3,96 +3,55 @@
 #include <Engine/ApplicationPlugin.hpp>
 #include <Execution/BaseScenarioComponent.hpp>
 
+#include <score/actions/Menu.hpp>
+#include <score/actions/MenuManager.hpp>
 #include <score/plugins/documentdelegate/plugin/DocumentPluginCreator.hpp>
 
-#include <QFile>
+#include <QApplication>
+#include <QMenu>
 
-#include <Pico/DeviceGraph.hpp>
+#include <Pico/Pruner.hpp>
 #include <Pico/SourcePrinter.hpp>
-#include <Scenario/Document/Interval/IntervalExecution.hpp>
+#include <Scenario/Application/Menus/TextDialog.hpp>
+#include <Scenario/Document/BaseScenario/BaseScenario.hpp>
 #include <Scenario/Document/ScenarioDocument/ScenarioDocumentModel.hpp>
-#include <Scenario/Execution/ScenarioExecution.hpp>
-#include <Scenario/Process/ScenarioExecution.hpp>
 
 namespace Pico
 {
 
-class Pruner
+score::GUIElements AppPlug::makeGUIElements()
 {
-public:
-  const score::DocumentContext& context;
-  Devices devices;
-  explicit Pruner(const score::DocumentContext& doc)
-      : context{doc}
-  {
-  }
+  auto& m = context.menus.get().at(score::Menus::Export());
+  QMenu* menu = m.menu();
+  auto pouco = new QAction{QObject::tr("Scenario to Arduino"), menu};
 
-  void operator()(
-      const Execution::Context& ctx,
-      Execution::BaseScenarioElement& scenar) noexcept
-  {
-    devices.clear();
-    (*this)(scenar.baseInterval(), {});
-    for (auto& device : devices)
-    {
-      qDebug() << "Device: " << device.first << ": "
-               << device.second.processes.size();
-      device.second.name = device.first;
-      device.second.ios.push_back(DeviceIO{
-          .type = DeviceIO::ADC, .direction = DeviceIO::Input, .pin = 0});
-      device.second.ios.push_back(DeviceIO{
-          .type = DeviceIO::PWM, .direction = DeviceIO::Output, .pin = 21});
-
-      auto components = device.second.processGraph(ctx.doc);
-      SourcePrinter p;
-      QString src = p.print(device.second, ctx.doc, components);
-      QString filename = QString("/tmp/picodevice.%1.cpp").arg(device.first);
+  QObject::connect(
+      pouco,
+      &QAction::triggered,
+      [&]()
       {
-        QFile f(filename);
-        f.open(QIODevice::WriteOnly);
-        f.write(src.toUtf8());
-      }
-      system(("clang-format -i " + filename.toStdString()).c_str());
-      {
-        QFile f(filename);
-        f.open(QIODevice::ReadOnly);
-        QString src = f.readAll();
-        qDebug().noquote().nospace() << src;
-      }
-    }
-  }
+        auto doc = currentDocument();
+        if (!doc)
+          return;
+        Scenario::ScenarioDocumentModel& base
+            = score::IDocument::get<Scenario::ScenarioDocumentModel>(*doc);
 
-  void operator()(Execution::IntervalComponent& cst, QString group)
-  {
-    // FIXME use Interval::networkGroup() when it's merged in master
-    if (const auto& label = cst.interval().metadata().getLabel();
-        label.contains("pico"))
-      group = label;
+        const auto& baseInterval = base.baseScenario().interval();
+        if (baseInterval.processes.size() == 0)
+          return;
 
-    for (auto& proc : cst.processes())
-    {
-      if (auto scenar_scan
-          = qobject_cast<Execution::ScenarioComponentBase*>(proc.second.get()))
-      {
-        for (auto& itv : scenar_scan->intervals())
-        {
-          (*this)(*itv.second, group);
-        }
-      }
-      else
-      {
-        (*this)(*proc.second, group);
-      }
-    }
-  }
-
-  void operator()(Execution::ProcessComponent& comp, QString group)
-  {
-    // Check where this process executes - for now we just use the label of the parent interval
-    devices[group].processes.push_back(&comp.process());
-  }
-};
-
+        Pruner p{doc->context()};
+        QString text = p.process(baseInterval);
+        // QString text
+        //     = stal::generateReactiveIS(base.baseScenario(), baseInterval);
+        Scenario::TextDialog dial(text, qApp->activeWindow());
+        dial.exec();
+      });
+  menu->addAction(pouco);
+  qDebug() << "ayy wtf" << menu << pouco;
+  return {};
+}
+/*
 class DocPlug : public score::DocumentPlugin
 {
 public:
@@ -108,10 +67,11 @@ public:
 
   void play() { }
 };
+*/
 
 void AppPlug::on_createdDocument(score::Document& doc)
 {
-  score::addDocumentPlugin<DocPlug>(doc);
+  //score::addDocumentPlugin<DocPlug>(doc);
 }
 
 }

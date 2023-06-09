@@ -3,6 +3,7 @@
 #include <score/model/path/Path.hpp>
 
 #include <ossia/detail/algorithms.hpp>
+#include <ossia/detail/hash_map.hpp>
 
 #include <Scenario/Document/Event/EventModel.hpp>
 #include <Scenario/Document/Interval/IntervalModel.hpp>
@@ -12,14 +13,14 @@
 #include <Scenario/Process/ScenarioModel.hpp>
 #include <fmt/format.h>
 // clang-format off
-namespace stal
+namespace Pico
 {
 class CPPVisitor
 {
-  std::unordered_map<const Scenario::IntervalModel*, int> itv_ids;
-  std::unordered_map<const Scenario::EventModel*, int> ev_ids;
-  std::unordered_map<const Scenario::TimeSyncModel*, int> trig_ids;
-  std::unordered_map<const Process::ProcessModel*, int> proc_ids;
+  ossia::hash_map<const Scenario::IntervalModel*, int> itv_ids;
+  ossia::hash_map<const Scenario::EventModel*, int> ev_ids;
+  ossia::hash_map<const Scenario::TimeSyncModel*, int> trig_ids;
+  ossia::hash_map<const Process::ProcessModel*, int> proc_ids;
   int cur_itv_id{};
   int cur_node_id{};
   int cur_proc_id{};
@@ -122,22 +123,26 @@ public:
     addLine("");
     for (auto& itv : proc.intervals)
     {
-      addLine("auto {} = time_interval::create({{}}, *{}, *{}, {}_tv, {}_tv, {}_tv);",
-              this->id(itv),
+      const auto& id = this->id(itv);
+      addLine("auto {} = ossia::time_interval::create({{}}, *{}, *{}, {}_tv, {}_tv, {}_tv);",
+              id,
               this->id(Scenario::startEvent(itv, proc)),
               this->id(Scenario::endEvent(itv, proc)),
               itv.duration.defaultDuration().impl,
               itv.duration.minDuration().impl,
               itv.duration.maxDuration().impl
               );
+       if(itv.graphal())
+       addLine("{}.graphal = true;", id);
+       addLine("{}->add_time_interval({});", this->id(proc), id);
     }
   }
 };
 
-QString toCPP(const Scenario::ProcessModel& s)
+std::string scenarioToCPP(const Scenario::ProcessModel& s)
 {
   CPPVisitor m;
   m(s);
-  return m.text;
+  return m.text.toStdString();
 }
 }

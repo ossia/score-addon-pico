@@ -74,7 +74,6 @@ score_addon_pico::~score_addon_pico() = default;
 score::GUIApplicationPlugin* score_addon_pico::make_guiApplicationPlugin(
     const score::GUIApplicationContext& app)
 {
-  return nullptr;
   return new Pico::AppPlug{app};
 }
 std::vector<std::unique_ptr<score::InterfaceBase>> score_addon_pico::factories(

@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 
-return()
 if(NOT TARGET score_lib_base)
   include("${SCORE_SOURCE_DIR}/cmake/ScoreExternalAddon.cmake")
 endif()
@@ -17,10 +16,16 @@ add_library(score_addon_pico
   Pico/DeviceIO.cpp
   Pico/DeviceGraph.hpp
   Pico/DeviceGraph.cpp
+  Pico/BasicSourcePrinter.hpp
+  Pico/BasicSourcePrinter.cpp
+  Pico/ESPSourcePrinter.hpp
+  Pico/ESPSourcePrinter.cpp
   Pico/SourcePrinter.hpp
   Pico/SourcePrinter.cpp
   Pico/LibossiaGenerator.hpp
   Pico/LibossiaGenerator.cpp
+  Pico/Pruner.hpp
+  Pico/Pruner.cpp
 
   score_addon_pico.hpp
   score_addon_pico.cpp
@@ -59,6 +64,14 @@ add_math_process(LesserEqual)
 
 add_math_process(Spigot)
 add_math_process(Choice)
+
+avnd_score_plugin_add(
+  BASE_TARGET score_addon_pico
+  SOURCES "${AVND_FOLDER}/examples/Advanced/Utilities/LFO.hpp"
+  TARGET avnd_blocks_lfo_x
+  MAIN_CLASS LFO
+  NAMESPACE ao
+)
 #
 # avnd_score_plugin_add(
 #   BASE_TARGET score_addon_pico

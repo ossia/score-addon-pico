@@ -11,9 +11,11 @@ struct DeviceIO
 {
   enum Type
   {
+    Variable,
+    Call,
     GPIO,
     PWM,
-    ADC
+    ADC,
   } type{};
   enum Direction
   {

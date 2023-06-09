@@ -12,6 +12,8 @@ public:
   using GUIApplicationPlugin::GUIApplicationPlugin;
 
   void on_createdDocument(score::Document& doc) override;
+
+  score::GUIElements makeGUIElements() override;
 };
 
 }

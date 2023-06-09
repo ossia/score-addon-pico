@@ -66,7 +66,12 @@ QString DeviceIO::printInitialization() const
           this->pin));
       return str;
     }
+    case Call:
+      break;
+    case Variable:
+      break;
   }
+  return {};
 }
 
 }
