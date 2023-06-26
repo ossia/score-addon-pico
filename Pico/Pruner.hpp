@@ -11,13 +11,37 @@ class ProcessModel;
 }
 namespace Pico
 {
-class Pruner
+class ProcessScenario
+{
+public:
+  const score::DocumentContext& context;
+  std::string scenario;
+  explicit ProcessScenario(const score::DocumentContext& doc);
+
+  QString process(const Scenario::IntervalModel& root);
+  void operator()(const Scenario::IntervalModel& cst);
+};
+
+class ComponentBasedSplit
 {
 public:
   const score::DocumentContext& context;
   std::string scenario;
   Devices devices;
-  explicit Pruner(const score::DocumentContext& doc);
+  explicit ComponentBasedSplit(const score::DocumentContext& doc);
+
+  QString process(const Scenario::IntervalModel& root);
+  void operator()(const Scenario::IntervalModel& cst, QString group);
+  void operator()(Process::ProcessModel& comp, QString group);
+};
+
+class IntervalSplit
+{
+public:
+  const score::DocumentContext& context;
+  std::string scenario;
+  Devices devices;
+  explicit IntervalSplit(const score::DocumentContext& doc);
 
   QString process(const Scenario::IntervalModel& root);
   void operator()(const Scenario::IntervalModel& cst, QString group);

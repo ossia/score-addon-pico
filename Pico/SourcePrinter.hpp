@@ -7,6 +7,8 @@ class ProcessModel;
 }
 namespace Pico
 {
-std::string defaultIncludes();
+std::string defaultIncludesGraph();
+std::string defaultIncludesScenario();
 std::string scenarioToCPP(const Scenario::ProcessModel& s);
+std::string scenarioToCPPStruct(const Scenario::ProcessModel& s);
 }

@@ -40,15 +40,18 @@ score::GUIElements AppPlug::makeGUIElements()
         if (baseInterval.processes.size() == 0)
           return;
 
-        Pruner p{doc->context()};
+        ProcessScenario ps{doc->context()};
+        ps.process(baseInterval);
+
+        IntervalSplit is{doc->context()};
+        is.process(baseInterval);
+
+        ComponentBasedSplit p{doc->context()};
         QString text = p.process(baseInterval);
-        // QString text
-        //     = stal::generateReactiveIS(base.baseScenario(), baseInterval);
-        Scenario::TextDialog dial(text, qApp->activeWindow());
-        dial.exec();
       });
+
   menu->addAction(pouco);
-  qDebug() << "ayy wtf" << menu << pouco;
+
   return {};
 }
 /*

@@ -72,15 +72,30 @@ avnd_score_plugin_add(
   MAIN_CLASS LFO
   NAMESPACE ao
 )
-#
-# avnd_score_plugin_add(
-#   BASE_TARGET score_addon_pico
-#   SOURCES "${AVND_FOLDER}/examples/Advanced/Utilities/Automation.hpp"
-#   TARGET automation
-#   MAIN_CLASS Automation
-#   NAMESPACE ao
-# )
-#
+
+avnd_score_plugin_add(
+  BASE_TARGET score_addon_pico
+  SOURCES "${AVND_FOLDER}/examples/Advanced/Utilities/Automation.hpp"
+  TARGET automation
+  MAIN_CLASS Automation
+  NAMESPACE ao
+)
+
+avnd_score_plugin_add(
+  BASE_TARGET score_addon_pico
+  SOURCES "${AVND_FOLDER}/examples/Advanced/Utilities/Mapping.hpp"
+  TARGET mapping
+  MAIN_CLASS Mapping
+  NAMESPACE ao
+)
+avnd_score_plugin_add(
+  BASE_TARGET score_addon_pico
+  SOURCES "${AVND_FOLDER}/examples/Advanced/Utilities/Soundfile.hpp"
+  TARGET soundfile
+  MAIN_CLASS Soundfile
+  NAMESPACE ao
+)
+
 avnd_score_plugin_finalize(
   BASE_TARGET score_addon_pico
   CUSTOM_PLUGIN

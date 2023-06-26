@@ -7,16 +7,49 @@
 #include <Pico/SourcePrinter.hpp>
 #include <Scenario/Document/Interval/IntervalModel.hpp>
 #include <Scenario/Process/ScenarioModel.hpp>
-
+#include <fmt/format.h>
+#define ROOT_FOLDER "/home/jcelerier/pico/"
 namespace Pico
 {
 
-Pruner::Pruner(const score::DocumentContext& doc)
+ProcessScenario::ProcessScenario(const score::DocumentContext& doc)
     : context{doc}
 {
 }
 
-QString Pruner::process(const Scenario::IntervalModel& root)
+QString ProcessScenario::process(const Scenario::IntervalModel& root)
+{
+  QString text;
+  scenario.clear();
+
+  // 0. Generate the code for the scenario
+  for (auto& proc : root.processes)
+  {
+    if (auto scenar = qobject_cast<Scenario::ProcessModel*>(&proc))
+    {
+      scenario += Pico::scenarioToCPPStruct(*scenar);
+      break;
+    }
+  }
+
+  {
+    QFile f(ROOT_FOLDER "/scenario-struct.hpp");
+    f.open(QIODevice::WriteOnly);
+    f.write(scenario.c_str(), scenario.length());
+  }
+
+  text = QString::fromStdString(scenario);
+  return text;
+}
+
+////////////////////////////////////////////////////////////////////////////
+
+ComponentBasedSplit::ComponentBasedSplit(const score::DocumentContext& doc)
+    : context{doc}
+{
+}
+
+QString ComponentBasedSplit::process(const Scenario::IntervalModel& root)
 {
   QString text;
   devices.clear();
@@ -28,42 +61,30 @@ QString Pruner::process(const Scenario::IntervalModel& root)
   // 2. For each device, generate a graph
   for (std::pair<const QString, Device>& device : devices)
   {
-    qDebug() << "Device: " << device.first << ": "
-             << device.second.processes.size();
     device.second.name = device.first;
     device.second.ios.push_back(DeviceIO{
         .type = DeviceIO::ADC, .direction = DeviceIO::Input, .pin = 0});
     device.second.ios.push_back(DeviceIO{
         .type = DeviceIO::PWM, .direction = DeviceIO::Output, .pin = 21});
 
-    auto components = device.second.processGraph(context);
+    auto [components, order] = processGraph(context, device.second.processes);
     BasicSourcePrinter p;
     QString src = p.print(device.second, context, components);
-    QString filename = QString("/tmp/picodevice.%1.cpp").arg(device.first);
+    QString filename
+        = QString(ROOT_FOLDER "/picodevice.%1.hpp").arg(device.first);
     {
       QFile f(filename);
       f.open(QIODevice::WriteOnly);
       f.write(src.toUtf8());
     }
     system(("clang-format -i " + filename.toStdString()).c_str());
-    {
-      QFile f(filename);
-      f.open(QIODevice::ReadOnly);
-      text = f.readAll();
-      qDebug().noquote().nospace() << text;
-    }
-
-    {
-      QFile f("/tmp/scenario.cpp");
-      f.open(QIODevice::WriteOnly);
-      f.write(scenario.c_str(), scenario.length());
-    }
   }
-  system("code /tmp/scenario.cpp");
   return text;
 }
 
-void Pruner::operator()(const Scenario::IntervalModel& cst, QString group)
+void ComponentBasedSplit::operator()(
+    const Scenario::IntervalModel& cst,
+    QString group)
 {
   // FIXME use Interval::networkGroup() when it's merged in master
   if (const auto& label = cst.metadata().getLabel(); label.contains("pico"))
@@ -73,9 +94,6 @@ void Pruner::operator()(const Scenario::IntervalModel& cst, QString group)
   {
     if (auto scenar = qobject_cast<Scenario::ProcessModel*>(&proc))
     {
-      // Generate the code for the scenario
-      scenario += Pico::scenarioToCPP(*scenar);
-
       // Scan for the devices
       for (auto& itv : scenar->intervals)
       {
@@ -89,10 +107,81 @@ void Pruner::operator()(const Scenario::IntervalModel& cst, QString group)
   }
 }
 
-void Pruner::operator()(Process::ProcessModel& comp, QString group)
+void ComponentBasedSplit::operator()(
+    Process::ProcessModel& comp,
+    QString group)
 {
   // Check where this process executes - for now we just use the label of the parent interval
   devices[group].processes.push_back(&comp);
 }
 
+////////////////////////////////////////////////////////////////////////////
+
+IntervalSplit::IntervalSplit(const score::DocumentContext& doc)
+    : context{doc}
+{
+}
+
+QString IntervalSplit::process(const Scenario::IntervalModel& root)
+{
+  QString text;
+  devices.clear();
+  scenario.clear();
+
+  // 1. Scan all the intervals with processes and create the tasks
+  GraphTasks to_process;
+  auto itvs = root.findChildren<Scenario::IntervalModel*>();
+  for (auto& itv : itvs)
+  {
+    if (!itv->processes.empty() && !itv->metadata().getLabel().isEmpty())
+    {
+      // Create a new task
+      GraphTasks::value_type v;
+
+      v.taskName = itv->metadata().getLabel();
+
+      // Add the processes
+      for (auto& p : itv->processes)
+        v.processes.push_back(&p);
+
+      // Topo sort them
+      auto [components, order] = processGraph(context, v.processes);
+      v.processes = std::move(order);
+
+      // Save the task
+      to_process.push_back(std::move(v));
+    }
+  }
+
+  // 2. Print the tasks
+  std::string task_text;
+  Device c;
+  c.name = "esp8266";
+  for (auto& task : to_process)
+  {
+
+    BasicSourcePrinter p;
+    QString taskCode = p.printTask(c, context, task.processes);
+
+    {
+      task_text += "\n";
+      task_text += fmt::format(
+          "static void {}()\n{{\n{}\n}}\n",
+          task.taskName.toStdString(),
+          taskCode.toStdString());
+    }
+  }
+  {
+
+    QString filename = QString(ROOT_FOLDER "/picotasks.hpp");
+    {
+      QFile f(filename);
+      f.open(QIODevice::WriteOnly);
+      f.write(task_text.data(), task_text.size());
+    }
+    system(("clang-format -i " + filename.toStdString()).c_str());
+  }
+
+  return text;
+}
 }

@@ -10,14 +10,28 @@ class ProcessModel;
 
 namespace Pico
 {
-using GraphTasks = std::vector<std::vector<Process::ProcessModel*>>;
+struct Task
+{
+  QString taskName;
+  std::vector<Process::ProcessModel*> processes;
+};
+
+using GraphTasks = std::vector<Task>;
+
+struct Graph
+{
+  GraphTasks tasks;
+  std::vector<Process::ProcessModel*> topo_order;
+};
+
+Graph processGraph(
+    const score::DocumentContext& context,
+    const std::vector<Process::ProcessModel*>& processes);
 struct Device
 {
   QString name;
   std::vector<Process::ProcessModel*> processes;
   std::vector<DeviceIO> ios;
-
-  GraphTasks processGraph(const score::DocumentContext& context);
 };
 using Devices = std::map<QString, Device>;
 

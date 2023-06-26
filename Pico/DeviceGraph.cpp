@@ -53,7 +53,9 @@ using UDProcessGraph = boost::adjacency_list<
     Process::ProcessModel*,
     boost::no_property>;
 
-GraphTasks Device::processGraph(const score::DocumentContext& context)
+Graph processGraph(
+    const score::DocumentContext& context,
+    const std::vector<Process::ProcessModel*>& processes)
 {
   const int N = processes.size();
   // make a graph and use boost::connected_components to generate tasks
@@ -119,17 +121,24 @@ GraphTasks Device::processGraph(const score::DocumentContext& context)
   // (e.g. for "pull" algorithms: the last node in a chain comes first).
   // Here we are in push mode so we want the "normal" topo sort, e.g. the reverse
   // of boost's
-  std::vector<std::vector<Process::ProcessModel*>> components(component_count);
+  Graph g;
+  g.tasks.resize(component_count);
+  g.topo_order.reserve(N);
+  GraphTasks& components = g.tasks;
 
+  for (int i = 0; i < component_count; i++)
+    components[i].taskName = QString::number(i);
   for (auto it = topo.rbegin(); it != topo.rend(); ++it)
   {
     unsigned long vtx = *it;
     Process::ProcessModel* process = graph[vtx];
     int component = component_map.at(vtx);
 
-    components.at(component).push_back(process);
+    components.at(component).processes.push_back(process);
+
+    g.topo_order.push_back(process);
   }
-  return components;
+  return g;
 }
 
 }

@@ -15,27 +15,32 @@ namespace Pico
 {
 static const std::string error_string = ":*:ERROR:*:";
 static const std::string todo_string = ":*:TODO:*:";
-static std::string address_to_device_read_index(const State::Address& addr)
+static std::string
+address_to_device_read_index(const State::Address& addr, std::string var)
 {
-  return fmt::format("do_device_read(\"{}\")", addr.toString().toStdString());
+  return fmt::format(
+      "do_device_read<\"{}\">({})", addr.toString().toStdString(), var);
 }
 
-static std::string address_to_network_read_index(const State::Address& addr)
+static std::string
+address_to_network_read_index(const State::Address& addr, std::string var)
 {
-  return fmt::format("do_network_read(\"{}\")", addr.toString().toStdString());
+  return fmt::format(
+      "do_network_read<\"{}\">({})", addr.toString().toStdString(), var);
 }
 
 static std::string
 address_to_device_write_index(const State::Address& addr, std::string var)
 {
   return fmt::format(
-      "do_device_write(\"{}\", {})", addr.toString().toStdString(), var);
+      "do_device_write<\"{}\">({})", addr.toString().toStdString(), var);
 }
 
-static std::string address_to_network_write_index(const State::Address& addr)
+static std::string
+address_to_network_write_index(const State::Address& addr, std::string var)
 {
   return fmt::format(
-      "do_network_write(\"{}\")", addr.toString().toStdString());
+      "do_network_write<\"{}\">({})", addr.toString().toStdString(), var);
 }
 
 QString BasicSourcePrinter::printTask(
@@ -71,37 +76,46 @@ QString BasicSourcePrinter::printTask(
     for (auto& wr : codes)
     {
       std::string name = procs[index]->metadata().getName().toStdString();
+      std::string init = wr->initializer();
       wr->variable = fmt::format("p{}", index);
-      c += fmt::format("{} {}; // {}\n", wr->typeName(), wr->variable, name);
+      c += fmt::format(
+          "static {} {} {{\n{}\n}}; // {}\n",
+          wr->typeName(),
+          wr->variable,
+          init,
+          name);
       index++;
     }
   }
 
   // Start the loop
-  c += "for(;;) { \n";
+  // c += "for(;;) { \n";
 
   // 2. Write the inputs addresses
+
+  c += fmt::format("/// INPUT READ\n\n");
   {
     int process_index = 0;
     for (auto* p : procs)
     {
       auto& wr = codes[process_index];
 
+      c += fmt::format("/// p: {}\n", p->metadata().getName().toStdString());
       for (auto inl : p->inlets())
       {
         if (inl->address().address.device == device.name)
         {
           c += fmt::format(
-              "{{ {} = {}; }}\n",
-              wr->accessInlet(inl->id()),
-              address_to_device_read_index(inl->address().address));
+              "{{ {}; }}\n",
+              address_to_device_read_index(
+                  inl->address().address, wr->accessInlet(inl->id())));
         }
         else if (!inl->address().address.device.isEmpty())
         {
           c += fmt::format(
-              "{{ {} = world.read_network<{}>(); }}\n",
-              wr->accessInlet(inl->id()),
-              address_to_network_read_index(inl->address().address));
+              "{{ {}; }}\n",
+              address_to_network_read_index(
+                  inl->address().address, wr->accessInlet(inl->id())));
         }
       }
 
@@ -109,12 +123,14 @@ QString BasicSourcePrinter::printTask(
     }
   }
 
+  c += fmt::format("/// GRAPH PROCESSING\n\n");
   // 3. Write down the graph
   {
     int process_index = 0;
     for (auto& wr : codes)
     {
       auto& p = *procs[process_index];
+      c += fmt::format("/// p: {}\n", p.metadata().getName().toStdString());
       // Set all the cable inlets
       for (auto inl : p.inlets())
       {
@@ -126,7 +142,7 @@ QString BasicSourcePrinter::printTask(
               index_of_parent != -1)
           {
             c += fmt::format(
-                "{{ {} = {}; }}\n",
+                "{{ value_adapt({}, {}); }}\n",
                 wr->accessInlet(inl->id()),
                 codes[index_of_parent]->accessOutlet(out->id()));
           }
@@ -145,13 +161,15 @@ QString BasicSourcePrinter::printTask(
     }
   }
 
-  // 4. Write the outputsaddresses
+  // 4. Write the outputs addresses
+  c += fmt::format("/// OUTPUT WRITE\n\n");
   {
     int process_index = 0;
     for (auto* p : procs)
     {
       auto& wr = codes[process_index];
 
+      c += fmt::format("/// p: {}\n", p->metadata().getName().toStdString());
       for (auto inl : p->outlets())
       {
         if (inl->address().address.device == device.name)
@@ -164,9 +182,9 @@ QString BasicSourcePrinter::printTask(
         else if (!inl->address().address.device.isEmpty())
         {
           c += fmt::format(
-              "{{ world.write_network<{}>({}); }}\n",
-              address_to_network_write_index(inl->address().address),
-              wr->accessOutlet(inl->id()));
+              "{{ {}; }}\n",
+              address_to_network_write_index(
+                  inl->address().address, wr->accessOutlet(inl->id())));
         }
       }
 
@@ -175,7 +193,9 @@ QString BasicSourcePrinter::printTask(
   }
 
   // End the loop
-  c += "}\n}\n";
+  // c += "}\n";
+
+  c += "}\n";
 
   return QString::fromStdString(c);
 }
@@ -187,7 +207,7 @@ QString BasicSourcePrinter::print(
 {
   // 4. Print source code
   std::string source;
-  source += Pico::defaultIncludes();
+  source += Pico::defaultIncludesGraph();
 
   std::string task_creation;
   int task_n = 0;
@@ -197,8 +217,8 @@ QString BasicSourcePrinter::print(
   for (auto& comp : components)
   {
     source += "\n";
-    source += fmt::format("static void ossia_task_{}(void* arg) {{\n", task_n);
-    source += printTask(device, context, comp).toStdString();
+    source += fmt::format("static void ossia_task_{}() {{\n", task_n);
+    source += printTask(device, context, comp.processes).toStdString();
     source += "}\n";
 
     task_creation += fmt::format(R"_(ossia_task_{0}();)_", task_n);

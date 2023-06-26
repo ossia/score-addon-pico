@@ -3,9 +3,9 @@
 namespace Pico
 {
 
-std::string defaultIncludes()
+std::string defaultIncludesGraph()
 {
-    return R"_(
+  return R"_(
 #include <cstdio>
 #include <cmath>
 #include <cstring>

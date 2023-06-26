@@ -224,7 +224,7 @@ QString ESPSourcePrinter::print(
 {
   // 4. Print source code
   std::string source;
-  source += Pico::defaultIncludes();
+  source += Pico::defaultIncludesGraph();
   source += R"_(
 
 
@@ -260,7 +260,7 @@ struct world {
   {
     source += "\n";
     source += fmt::format("static void ossia_task_{}(void* arg) {{\n", task_n);
-    source += printTask(device, context, comp).toStdString();
+    source += printTask(device, context, comp.processes).toStdString();
     source += "}\n";
 
     task_creation += fmt::format(
