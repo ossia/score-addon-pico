@@ -76,11 +76,11 @@ score::GUIApplicationPlugin* score_addon_pico::make_guiApplicationPlugin(
 {
   return new Pico::AppPlug{app};
 }
-std::vector<std::unique_ptr<score::InterfaceBase>> score_addon_pico::factories(
+std::vector<score::InterfaceBase*> score_addon_pico::factories(
     const score::ApplicationContext& ctx,
     const score::InterfaceKey& key) const
 {
-  std::vector<std::unique_ptr<score::InterfaceBase>> fx;
+  std::vector<score::InterfaceBase*> fx;
   all_custom_factories(fx, ctx, key);
 
   return fx;
