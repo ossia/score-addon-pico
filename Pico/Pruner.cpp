@@ -1,14 +1,15 @@
 #include "Pruner.hpp"
 
+#include <Scenario/Document/Interval/IntervalModel.hpp>
+#include <Scenario/Process/ScenarioModel.hpp>
+
 #include <QFile>
 
 #include <Pico/BasicSourcePrinter.hpp>
 #include <Pico/ESPSourcePrinter.hpp>
 #include <Pico/SourcePrinter.hpp>
-#include <Scenario/Document/Interval/IntervalModel.hpp>
-#include <Scenario/Process/ScenarioModel.hpp>
 #include <fmt/format.h>
-#define ROOT_FOLDER "/home/jcelerier/pico/"
+
 namespace Pico
 {
 
@@ -32,12 +33,6 @@ QString ProcessScenario::process(const Scenario::IntervalModel& root)
     }
   }
 
-  {
-    QFile f(ROOT_FOLDER "/scenario-struct.hpp");
-    f.open(QIODevice::WriteOnly);
-    f.write(scenario.c_str(), scenario.length());
-  }
-
   text = QString::fromStdString(scenario);
   return text;
 }
@@ -48,10 +43,10 @@ ComponentBasedSplit::ComponentBasedSplit(const score::DocumentContext& doc)
     : context{doc}
 {
 }
-
-QString ComponentBasedSplit::process(const Scenario::IntervalModel& root)
+std::vector<std::pair<QString, QString>>
+ComponentBasedSplit::process(const Scenario::IntervalModel& root)
 {
-  QString text;
+  std::vector<std::pair<QString, QString>> res;
   devices.clear();
   scenario.clear();
 
@@ -70,16 +65,10 @@ QString ComponentBasedSplit::process(const Scenario::IntervalModel& root)
     auto [components, order] = processGraph(context, device.second.processes);
     BasicSourcePrinter p;
     QString src = p.print(device.second, context, components);
-    QString filename
-        = QString(ROOT_FOLDER "/picodevice.%1.hpp").arg(device.first);
-    {
-      QFile f(filename);
-      f.open(QIODevice::WriteOnly);
-      f.write(src.toUtf8());
-    }
-    system(("clang-format -i " + filename.toStdString()).c_str());
+    QString filename = device.first;
+    res.emplace_back(filename, src);
   }
-  return text;
+  return res;
 }
 
 void ComponentBasedSplit::operator()(
@@ -124,7 +113,6 @@ IntervalSplit::IntervalSplit(const score::DocumentContext& doc)
 
 QString IntervalSplit::process(const Scenario::IntervalModel& root)
 {
-  QString text;
   devices.clear();
   scenario.clear();
 
@@ -159,7 +147,6 @@ QString IntervalSplit::process(const Scenario::IntervalModel& root)
   c.name = "esp8266";
   for (auto& task : to_process)
   {
-
     BasicSourcePrinter p;
     QString taskCode = p.printTask(c, context, task.processes);
 
@@ -171,17 +158,7 @@ QString IntervalSplit::process(const Scenario::IntervalModel& root)
           taskCode.toStdString());
     }
   }
-  {
 
-    QString filename = QString(ROOT_FOLDER "/picotasks.hpp");
-    {
-      QFile f(filename);
-      f.open(QIODevice::WriteOnly);
-      f.write(task_text.data(), task_text.size());
-    }
-    system(("clang-format -i " + filename.toStdString()).c_str());
-  }
-
-  return text;
+  return QString::fromStdString(task_text);
 }
 }

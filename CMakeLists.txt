@@ -16,6 +16,8 @@ add_library(score_addon_pico
   Pico/DeviceIO.cpp
   Pico/DeviceGraph.hpp
   Pico/DeviceGraph.cpp
+  Pico/ExportDialog.hpp
+  Pico/ExportDialog.cpp
   Pico/BasicSourcePrinter.hpp
   Pico/BasicSourcePrinter.cpp
   Pico/ESPSourcePrinter.hpp
@@ -30,6 +32,8 @@ add_library(score_addon_pico
   score_addon_pico.hpp
   score_addon_pico.cpp
 )
+
+target_link_libraries(score_addon_pico PRIVATE score_plugin_protocols)
 
 avnd_score_plugin_init(BASE_TARGET score_addon_pico)
 

@@ -7,14 +7,12 @@
 #include <score/actions/MenuManager.hpp>
 #include <score/plugins/documentdelegate/plugin/DocumentPluginCreator.hpp>
 
-#include <QApplication>
+#include <QAction>
+#include <QDialog>
+#include <QMainWindow>
 #include <QMenu>
 
-#include <Pico/Pruner.hpp>
-#include <Pico/SourcePrinter.hpp>
-#include <Scenario/Application/Menus/TextDialog.hpp>
-#include <Scenario/Document/BaseScenario/BaseScenario.hpp>
-#include <Scenario/Document/ScenarioDocument/ScenarioDocumentModel.hpp>
+#include <Pico/ExportDialog.hpp>
 
 namespace Pico
 {
@@ -23,36 +21,23 @@ score::GUIElements AppPlug::makeGUIElements()
 {
   auto& m = context.menus.get().at(score::Menus::Export());
   QMenu* menu = m.menu();
-  auto pouco = new QAction{QObject::tr("Scenario to Arduino"), menu};
-
-  QObject::connect(
-      pouco,
-      &QAction::triggered,
-      [&]()
-      {
-        auto doc = currentDocument();
-        if (!doc)
-          return;
-        Scenario::ScenarioDocumentModel& base
-            = score::IDocument::get<Scenario::ScenarioDocumentModel>(*doc);
-
-        const auto& baseInterval = base.baseScenario().interval();
-        if (baseInterval.processes.size() == 0)
-          return;
-
-        ProcessScenario ps{doc->context()};
-        ps.process(baseInterval);
-
-        IntervalSplit is{doc->context()};
-        is.process(baseInterval);
-
-        ComponentBasedSplit p{doc->context()};
-        QString text = p.process(baseInterval);
-      });
-
-  menu->addAction(pouco);
+  auto act = new QAction{QObject::tr("Export to code"), menu};
+  act->setShortcutContext(Qt::ShortcutContext::ApplicationShortcut);
+  act->setShortcut(QKeySequence("Alt+Shift+E"));
+  QObject::connect(act, &QAction::triggered, this, &AppPlug::requestExport);
+  menu->addAction(act);
 
   return {};
+}
+
+void AppPlug::requestExport()
+{
+  if(auto win = score::GUIAppContext().mainWindow)
+  {
+    if(!m_dialog)
+      m_dialog = new ExportDialog{*this, win};
+    m_dialog->show();
+  }
 }
 /*
 class DocPlug : public score::DocumentPlugin
@@ -77,4 +62,4 @@ void AppPlug::on_createdDocument(score::Document& doc)
   //score::addDocumentPlugin<DocPlug>(doc);
 }
 
-}
+} // namespace Pico

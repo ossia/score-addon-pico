@@ -1,4 +1,6 @@
 #pragma once
+#include <ossia/detail/flat_map.hpp>
+
 #include <Pico/DeviceGraph.hpp>
 namespace Process
 {
@@ -30,7 +32,7 @@ public:
   Devices devices;
   explicit ComponentBasedSplit(const score::DocumentContext& doc);
 
-  QString process(const Scenario::IntervalModel& root);
+  std::vector<std::pair<QString, QString>> process(const Scenario::IntervalModel& root);
   void operator()(const Scenario::IntervalModel& cst, QString group);
   void operator()(Process::ProcessModel& comp, QString group);
 };
