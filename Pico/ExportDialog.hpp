@@ -19,14 +19,16 @@ public:
   AppPlug& plug;
   explicit ExportDialog(AppPlug& plug, QWidget* parent);
 
-  void on_export();
+  bool on_export();
 
   void on_build();
 
 private:
   bool copy_template_folder();
-  void export_device(const score::DocumentContext& ctx);
-  void export_scenario(const score::DocumentContext& ctx);
+  bool export_device(const score::DocumentContext& ctx);
+  bool export_scenario(const score::DocumentContext& ctx);
+  void append_stdout(QString);
+  void append_stderr(QString);
 
   QComboBox* m_mode{};
   QLineEdit* m_template{};

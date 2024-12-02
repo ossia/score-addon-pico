@@ -1,9 +1,14 @@
 #include "ExportDialog.hpp"
 
+#include <Device/Protocol/DeviceInterface.hpp>
+
 #include <Explorer/DocumentPlugin/DeviceDocumentPlugin.hpp>
 
 #include <Scenario/Document/BaseScenario/BaseScenario.hpp>
 #include <Scenario/Document/ScenarioDocument/ScenarioDocumentModel.hpp>
+
+#include <ossia/network/base/device.hpp>
+#include <ossia/network/base/node.hpp>
 
 #include <QApplication>
 #include <QComboBox>
@@ -14,9 +19,11 @@
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QProcess>
 #include <QPushButton>
 
 #include <Pico/ApplicationPlugin.hpp>
+#include <Pico/OSCQueryGenerator.hpp>
 #include <Pico/Pruner.hpp>
 #include <Pico/SourcePrinter.hpp>
 
@@ -25,20 +32,37 @@
 #include <Protocols/SimpleIO/SimpleIODevice.hpp>
 namespace Pico
 {
+static void copy_folder_recursively(const QString& src, const QString& dst)
+{
+  QDirIterator it{
+      src, QDir::Filter::NoDotAndDotDot | QDir::Filter::Files | QDir::Filter::Dirs,
+      QDirIterator::Subdirectories};
+  QDir dir{src};
+  const int absSourcePathLength = dir.absoluteFilePath(src).length();
+
+  while(it.hasNext())
+  {
+    const auto fi = it.nextFileInfo();
+    const QString abs_path = dst + fi.absoluteFilePath().mid(absSourcePathLength);
+
+    if(fi.isDir())
+      QDir{}.mkpath(abs_path);
+    else if(fi.isFile() && !QFileInfo::exists(abs_path))
+      QFile::copy(fi.absoluteFilePath(), abs_path);
+  }
+}
 
 ExportDialog::ExportDialog(AppPlug& plug, QWidget* parent)
     : QDialog{parent}
     , plug{plug}
 {
   auto lay = new QFormLayout{this};
-  /// Export mode
   m_mode = new QComboBox{this};
   m_mode->addItems({tr("Remote-control"), tr("Full score")});
   lay->addRow(tr("Mode"), m_mode);
 
   m_template = new QLineEdit{this};
-  m_template->setText(
-      "/home/jcelerier/projets/oss/puara-module-template/ossia-device-test");
+  m_template->setText(PICO_SOURCE_DIR "/templates/totem-tinypico-firmware");
   lay->addRow(tr("Path to template"), m_template);
 
   m_destination = new QLineEdit{this};
@@ -46,7 +70,8 @@ ExportDialog::ExportDialog(AppPlug& plug, QWidget* parent)
   lay->addRow(tr("Destination"), m_destination);
 
   m_textArea = new QPlainTextEdit{this};
-  m_textArea->setTextInteractionFlags(Qt::TextInteractionFlag::TextBrowserInteraction);
+  // QTBUG-131762
+  // m_textArea->setTextInteractionFlags(Qt::TextInteractionFlag::TextBrowserInteraction);
   lay->addWidget(m_textArea);
 
   m_buttons = new QDialogButtonBox{this};
@@ -60,14 +85,6 @@ ExportDialog::ExportDialog(AppPlug& plug, QWidget* parent)
   connect(build_btn, &QPushButton::clicked, this, &ExportDialog::on_build);
 
   lay->addWidget(m_buttons);
-
-  // Template
-  // e.g. a puara module template ?
-  // or a wasm one ?
-  // or a desktop one
-
-  // Target ?
-  // note : do not overwrite copied files
 }
 
 bool ExportDialog::copy_template_folder()
@@ -83,68 +100,76 @@ bool ExportDialog::copy_template_folder()
       return false;
   }
 
-  QDir src_dir{src};
-  src_dir.setFilter(QDir::Filter::Files | QDir::Filter::NoDotAndDotDot);
-
-  QDirIterator d{src_dir, QDirIterator::IteratorFlag::Subdirectories};
-
-  while(d.hasNext())
-  {
-    auto src_file = d.next();
-    auto src_relpath = src_dir.relativeFilePath(src_file);
-
-    QString dst_file = dst + QDir::separator() + src_relpath;
-    if(!QFileInfo::exists(dst_file))
-    {
-      QFile::copy(src_file, dst_file);
-    }
-  }
+  copy_folder_recursively(src, dst);
   return true;
 }
 
-void ExportDialog::export_device(const score::DocumentContext& ctx)
+bool ExportDialog::export_device(const score::DocumentContext& ctx)
 {
+  // For template ossia-device
   auto& devices = ctx.plugin<Explorer::DeviceDocumentPlugin>();
   for(auto dev : devices.list().devices())
   {
     if(auto obj = qobject_cast<Protocols::SimpleIODevice*>(dev))
     {
-      Protocols::SimpleIOCodeWriter_ESP32 wr{*obj};
-      std::string ret;
-      ret += R"_(
+      // Write the device OSC UDP I/O
+      {
+        Protocols::SimpleIOCodeWriter_ESP32 wr{*obj};
+        std::string ret;
+        ret += R"_(
 #include "ossia_embedded_api.hpp"
 #include "constants.hpp"
 #include "utility.hpp"
 
 #include <soc/adc_channel.h>
 )_";
-      ret += wr.init();
-      ret += wr.readOSC();
-      ret += wr.readPins();
-      ret += wr.writeOSC();
-      ret += wr.writePins();
+        ret += wr.init();
+        ret += wr.readOSC();
+        ret += wr.readPins();
+        ret += wr.writeOSC();
+        ret += wr.writePins();
 
-      QFile dst{
-          m_destination->text() + QDir::separator() + "ossia.device.generated.cpp"};
-      dst.open(QIODevice::WriteOnly);
-      dst.write(ret.data(), ret.size());
-      dst.flush();
+        {
+          QFile dst{
+              m_destination->text() + QDir::separator() + "ossia-device.generated.cpp"};
+          dst.open(QIODevice::WriteOnly);
+          dst.write(ret.data(), ret.size());
+          dst.flush();
+        }
+      }
 
-      break;
+      // Write the device OSCQuery API
+      {
+        auto root_model_node = obj->getNode(State::Address{});
+        root_model_node.set(obj->settings());
+        auto ret = Pico::oscquery_generate_namespace(root_model_node);
+        {
+          QFile dst{
+              m_destination->text() + QDir::separator()
+              + "ossia-oscquery.generated.hpp"};
+          dst.open(QIODevice::WriteOnly);
+          dst.write(ret.toUtf8());
+          dst.flush();
+        }
+      }
+
+      return true;
     }
   }
+  return false;
 }
 
-void ExportDialog::export_scenario(const score::DocumentContext& ctx)
+bool ExportDialog::export_scenario(const score::DocumentContext& ctx)
 {
+  // For template ossia-full-*
   Scenario::ScenarioDocumentModel& base
       = score::IDocument::get<Scenario::ScenarioDocumentModel>(ctx.document);
 
   const auto& baseInterval = base.baseScenario().interval();
   if(baseInterval.processes.size() == 0)
-    return;
+    return false;
 
-  auto root = m_destination->text() + QDir::separator();
+  QString root = m_destination->text() + QDir::separator();
 
   ProcessScenario ps{ctx};
   {
@@ -173,35 +198,76 @@ void ExportDialog::export_scenario(const score::DocumentContext& ctx)
       f.write(content.toUtf8());
     }
   }
+  return true;
 }
 
-void ExportDialog::on_export()
+bool ExportDialog::on_export()
 {
   auto doc = plug.currentDocument();
   if(!doc)
-    return;
+    return false;
 
   if(!copy_template_folder())
   {
     qDebug() << "Failed to copy template folder from " << m_template->text() << " to "
              << m_destination->text();
-    return;
+    return false;
   }
 
   switch(static_cast<ExportMode>(m_mode->currentIndex()))
   {
     case RemoteControl:
-      export_device(doc->context());
-      break;
+      return export_device(doc->context());
     case FullScore:
-      export_scenario(doc->context());
-      break;
+      return export_scenario(doc->context());
   }
+  return false;
+}
+
+void ExportDialog::append_stdout(QString s)
+{
+  this->m_textArea->appendPlainText(s);
+}
+
+void ExportDialog::append_stderr(QString s)
+{
+  this->m_textArea->appendPlainText(s);
 }
 
 void ExportDialog::on_build()
 {
-  on_export();
+  if(!on_export())
+    return;
+
+  QString root = m_destination->text() + QDir::separator();
+  QProcess* p = new QProcess;
+  p->setWorkingDirectory(root);
+  connect(p, &QProcess::readyReadStandardOutput, this, [this, p]() {
+    this->append_stdout(p->readAllStandardOutput());
+  });
+  connect(p, &QProcess::readyReadStandardError, this, [this, p]() {
+    this->append_stderr(p->readAllStandardError());
+  });
+  connect(p, &QProcess::finished, p, &QProcess::deleteLater);
+
+  if(QFile::exists(root + "platformio.ini"))
+  {
+    p->start(
+        qEnvironmentVariable("HOME") + "/.platformio/penv/bin/pio",
+        {"run", "-t", "upload"});
+  }
+  else if(QFile::exists(root + "build.sh"))
+  {
+    p->start(root + "build.sh");
+  }
+  else if(QFile::exists(root + "CMakeLists.txt"))
+  {
+    p->start("cninja");
+  }
+  else
+  {
+    delete p;
+  }
 }
 
 }

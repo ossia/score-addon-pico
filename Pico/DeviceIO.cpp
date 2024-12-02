@@ -27,6 +27,8 @@ QString DeviceIO::printInitialization() const
 
       return str;
     }
+    // TODO MCPWM
+    // TODO Servo
     case PWM:
     {
       QString str;

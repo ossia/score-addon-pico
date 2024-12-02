@@ -26,6 +26,8 @@ add_library(score_addon_pico
   Pico/SourcePrinter.cpp
   Pico/LibossiaGenerator.hpp
   Pico/LibossiaGenerator.cpp
+  Pico/OSCQueryGenerator.hpp
+  Pico/OSCQueryGenerator.cpp
   Pico/Pruner.hpp
   Pico/Pruner.cpp
 
@@ -33,6 +35,7 @@ add_library(score_addon_pico
   score_addon_pico.cpp
 )
 
+target_compile_definitions(score_addon_pico PRIVATE "PICO_SOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\"")
 target_link_libraries(score_addon_pico PRIVATE score_plugin_protocols)
 
 avnd_score_plugin_init(BASE_TARGET score_addon_pico)
