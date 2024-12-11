@@ -9,6 +9,8 @@
 #include <ossia/detail/fmt.hpp>
 
 #include <Pico/SourcePrinter.hpp>
+#include <QDebug>
+#include <QTextStream>
 
 namespace Pico
 {
@@ -97,8 +99,12 @@ QString ESPSourcePrinter::printTask(
     }
     else
     {
-      qFatal() << "Process:" << p->metadata().getName() << typeid(*p).name()
+      QString fatalMessage;
+      QTextStream outputStream(&fatalMessage);
+      outputStream << "Process:" << p->metadata().getName() << typeid(*p).name()
                << " does not have a code writer";
+      outputStream.flush();
+      qFatal(qPrintable(fatalMessage));
     }
   }
 
