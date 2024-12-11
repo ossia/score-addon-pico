@@ -11,6 +11,8 @@
 #include <Pico/LibossiaGenerator.hpp>
 #include <Pico/SourcePrinter.hpp>
 
+#include <QTextStream>
+
 namespace Pico
 {
 static const std::string error_string = ":*:ERROR:*:";
@@ -65,8 +67,12 @@ QString BasicSourcePrinter::printTask(
     }
     else
     {
-      qFatal() << "Process:" << p->metadata().getName() << typeid(*p).name()
-               << " does not have a code writer";
+      QString fatalMessage;
+      QTextStream outputStream(&fatalMessage);
+      outputStream << "Process:" << p->metadata().getName() << typeid(*p).name()
+                   << " does not have a code writer";
+      outputStream.flush();
+      qFatal(qPrintable(fatalMessage));
     }
   }
 
