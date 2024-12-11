@@ -230,7 +230,7 @@ QString BasicSourcePrinter::print(
 
   source += fmt::format(
       R"_(
-extern "C" void run_graph(void)
+extern "C" void ossia_run_graph(void)
 {{
   {}
 }}

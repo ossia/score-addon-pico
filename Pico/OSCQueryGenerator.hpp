@@ -8,5 +8,5 @@
 //}
 namespace Pico
 {
-QString oscquery_generate_namespace(const Device::Node& dev);
+QString oscquery_generate_namespace(const ::Device::Node& dev);
 }

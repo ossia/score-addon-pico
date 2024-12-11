@@ -36,7 +36,7 @@ oscquery_generate_namespace_rec(ossia::net::generic_device& odev, const Device::
     oscquery_generate_namespace_rec(odev, child);
 }
 
-QString oscquery_generate_namespace(const Device::Node& root)
+QString oscquery_generate_namespace(const ::Device::Node& root)
 {
   // 1. Load the data model into an ossia device
   ossia::net::generic_device odev;

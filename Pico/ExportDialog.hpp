@@ -1,4 +1,6 @@
 #pragma once
+#include <score/document/DocumentContext.hpp>
+
 #include <QDialog>
 class QComboBox;
 class QLineEdit;

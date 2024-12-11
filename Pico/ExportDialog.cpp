@@ -7,6 +7,8 @@
 #include <Scenario/Document/BaseScenario/BaseScenario.hpp>
 #include <Scenario/Document/ScenarioDocument/ScenarioDocumentModel.hpp>
 
+#include <core/document/Document.hpp>
+
 #include <ossia/network/base/device.hpp>
 #include <ossia/network/base/node.hpp>
 
@@ -42,7 +44,7 @@ static void copy_folder_recursively(const QString& src, const QString& dst)
 
   while(it.hasNext())
   {
-    const auto fi = it.nextFileInfo();
+    const auto fi = QFileInfo{it.next()};
     const QString abs_path = dst + fi.absoluteFilePath().mid(absSourcePathLength);
 
     if(fi.isDir())
@@ -62,7 +64,7 @@ ExportDialog::ExportDialog(AppPlug& plug, QWidget* parent)
   lay->addRow(tr("Mode"), m_mode);
 
   m_template = new QLineEdit{this};
-  m_template->setText(PICO_SOURCE_DIR "/templates/totem-tinypico-firmware");
+  m_template->setText(PICO_SOURCE_DIR "/templates/teensy-minimal");
   lay->addRow(tr("Path to template"), m_template);
 
   m_destination = new QLineEdit{this};
@@ -170,34 +172,34 @@ bool ExportDialog::export_scenario(const score::DocumentContext& ctx)
     return false;
 
   QString root = m_destination->text() + QDir::separator();
-
+  //
   ProcessScenario ps{ctx};
   {
     QString scenario = ps.process(baseInterval);
-    QFile f(root + "ossia-scenario.generated.cpp");
+    QFile f(root + "src/ossia-scenario.generated.cpp");
     f.open(QIODevice::WriteOnly);
     f.write(scenario.toUtf8());
   }
+  //
+  // IntervalSplit is{ctx};
+  // {
+  //   auto task_text = is.process(baseInterval);
+  //
+  //   QFile f(root + "src/ossia-tasks.generated.cpp");
+  //   f.open(QIODevice::WriteOnly);
+  //   f.write(task_text.toUtf8());
+  // }
 
-  IntervalSplit is{ctx};
-  {
-    auto task_text = is.process(baseInterval);
-
-    QFile f(root + "ossia-tasks.generated.cpp");
-    f.open(QIODevice::WriteOnly);
-    f.write(task_text.toUtf8());
-  }
-
-  ComponentBasedSplit p{ctx};
-  {
-    auto res = p.process(baseInterval);
-    for(const auto& [devname, content] : res)
-    {
-      QFile f(root + "ossia-component." + devname + ".generated.cpp");
-      f.open(QIODevice::WriteOnly);
-      f.write(content.toUtf8());
-    }
-  }
+  // ComponentBasedSplit p{ctx};
+  // {
+  //   auto res = p.process(baseInterval);
+  //   for(const auto& [devname, content] : res)
+  //   {
+  //     QFile f(root + "src/ossia-component." + devname + ".generated.cpp");
+  //     f.open(QIODevice::WriteOnly);
+  //     f.write(content.toUtf8());
+  //   }
+  // }
   return true;
 }
 

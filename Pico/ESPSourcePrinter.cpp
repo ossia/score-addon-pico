@@ -12,12 +12,12 @@
 
 namespace Pico
 {
-static const std::string error_string = ":*:ERROR:*:";
-static const std::string todo_string = ":*:TODO:*:";
+static const std::string error_string_esp = ":*:ERROR:*:";
+static const std::string todo_string_esp = ":*:TODO:*:";
 static std::string address_to_device_read_index(const State::Address& addr)
 {
   if (addr.path.size() < 2)
-    return error_string;
+    return error_string_esp;
 
   // Format:
   // /gpio/1
@@ -25,7 +25,7 @@ static std::string address_to_device_read_index(const State::Address& addr)
   bool ok{};
   int num = addr.path[1].toInt(&ok);
   if (!ok)
-    return error_string;
+    return error_string_esp;
   if (addr.path.startsWith("gpio"))
   {
     return fmt::format("gpio_get_level(GPIO_NUM_{})", num);
@@ -34,24 +34,24 @@ static std::string address_to_device_read_index(const State::Address& addr)
   {
     return fmt::format("adc1_get_raw(ADC1_CHANNEL_{})", num);
   }
-  return todo_string;
+  return todo_string_esp;
 }
 
 static std::string address_to_network_read_index(const State::Address& addr)
 {
-  return todo_string;
+  return todo_string_esp;
 }
 
 static std::string
 address_to_device_write_index(const State::Address& addr, std::string var)
 {
   if (addr.path.size() < 2)
-    return error_string;
+    return error_string_esp;
 
   bool ok{};
   int num = addr.path[1].toInt(&ok);
   if (!ok)
-    return error_string;
+    return error_string_esp;
   if (addr.path.startsWith("gpio"))
   {
     return fmt::format("gpio_set_level(GPIO_NUM_{}, {})", num, var);
@@ -67,12 +67,12 @@ address_to_device_write_index(const State::Address& addr, std::string var)
         var);
   }
 
-  return todo_string;
+  return todo_string_esp;
 }
 
 static std::string address_to_network_write_index(const State::Address& addr)
 {
-  return todo_string;
+  return todo_string_esp;
 }
 
 QString ESPSourcePrinter::printTask(

@@ -21,6 +21,7 @@ std::string defaultIncludesGraph()
 #include <avnd/wrappers/metadatas.hpp>
 #include <avnd/../../examples/Advanced/Utilities/Math.hpp>
 #include <ExprtkMapper.hpp>
+#include <ScoreHelpers.hpp>
 
 
 )_";
