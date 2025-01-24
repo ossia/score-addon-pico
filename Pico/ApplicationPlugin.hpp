@@ -10,6 +10,7 @@ public:
   using GUIApplicationPlugin::GUIApplicationPlugin;
 
   void on_createdDocument(score::Document& doc) override;
+  void on_loadedDocument(score::Document& doc) override;
 
   score::GUIElements makeGUIElements() override;
 

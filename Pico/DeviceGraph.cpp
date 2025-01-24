@@ -138,6 +138,27 @@ Graph processGraph(
 
     g.topo_order.push_back(process);
   }
+
+  // 6. Store the used addresses
+
+  for(auto& task : components)
+  {
+    for(auto& proc : task.processes)
+    {
+      for(auto inl : proc->inlets())
+        if(const auto& addr = inl->address(); addr.isSet())
+        {
+          g.in_addresses[addr.address.device].insert(addr.address.path);
+          g.merged_addresses[addr.address.device].insert(addr.address.path);
+        }
+      for(auto outl : proc->outlets())
+        if(const auto& addr = outl->address(); addr.isSet())
+        {
+          g.out_addresses[addr.address.device].insert(addr.address.path);
+          g.merged_addresses[addr.address.device].insert(addr.address.path);
+        }
+    }
+  }
   return g;
 }
 

@@ -62,11 +62,27 @@ ComponentBasedSplit::process(const Scenario::IntervalModel& root)
     device.second.ios.push_back(DeviceIO{
         .type = DeviceIO::PWM, .direction = DeviceIO::Output, .pin = 21});
 
-    auto [components, order] = processGraph(context, device.second.processes);
+    const auto& g = processGraph(context, device.second.processes);
+
     BasicSourcePrinter p;
-    QString src = p.print(device.second, context, components);
-    QString filename = device.first;
-    res.emplace_back(filename, src);
+    // Print the data model
+    {
+      QString src = p.printDataModel(device.second, g);
+      QString filename = device.first + ".ossia-model.generated.hpp";
+      res.emplace_back(filename, src);
+    }
+    // Print the device access
+    {
+      QString src = p.printDeviceCommunication(device.second, context, g);
+      QString filename = device.first + ".ossia-device.generated.hpp";
+      res.emplace_back(filename, src);
+    }
+    // Print the main graph tasks file
+    {
+      QString src = p.print(device.second, context, g);
+      QString filename = device.first + ".ossia-graph.generated.hpp";
+      res.emplace_back(filename, src);
+    }
   }
   return res;
 }
@@ -133,8 +149,8 @@ QString IntervalSplit::process(const Scenario::IntervalModel& root)
         v.processes.push_back(&p);
 
       // Topo sort them
-      auto [components, order] = processGraph(context, v.processes);
-      v.processes = std::move(order);
+      auto g = processGraph(context, v.processes);
+      v.processes = std::move(g.topo_order);
 
       // Save the task
       to_process.push_back(std::move(v));

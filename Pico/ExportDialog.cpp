@@ -51,6 +51,21 @@ static void copy_folder_recursively(const QString& src, const QString& dst)
       QDir{}.mkpath(abs_path);
     else if(fi.isFile() && !QFileInfo::exists(abs_path))
       QFile::copy(fi.absoluteFilePath(), abs_path);
+    else if(fi.isFile() && QFileInfo::exists(abs_path))
+    {
+      QFile f1{fi.filePath()};
+      f1.open(QIODevice::ReadOnly);
+      QFile f2{abs_path};
+      f2.open(QIODevice::ReadWrite);
+      auto f1_content = f1.readAll();
+      auto f2_content = f2.readAll();
+      if(f1_content != f2_content)
+      {
+        f2.seek(0);
+        f2.resize(0);
+        f2.write(f1_content);
+      }
+    }
   }
 }
 
@@ -61,6 +76,7 @@ ExportDialog::ExportDialog(AppPlug& plug, QWidget* parent)
   auto lay = new QFormLayout{this};
   m_mode = new QComboBox{this};
   m_mode->addItems({tr("Remote-control"), tr("Full score")});
+  m_mode->setCurrentIndex(1);
   lay->addRow(tr("Mode"), m_mode);
 
   m_template = new QLineEdit{this};
@@ -106,7 +122,7 @@ bool ExportDialog::copy_template_folder()
   return true;
 }
 
-bool ExportDialog::export_device(const score::DocumentContext& ctx)
+bool export_device(const score::DocumentContext& ctx, QString destination)
 {
   // For template ossia-device
   auto& devices = ctx.plugin<Explorer::DeviceDocumentPlugin>();
@@ -132,8 +148,7 @@ bool ExportDialog::export_device(const score::DocumentContext& ctx)
         ret += wr.writePins();
 
         {
-          QFile dst{
-              m_destination->text() + QDir::separator() + "ossia-device.generated.cpp"};
+          QFile dst{destination + QDir::separator() + "ossia-device.generated.cpp"};
           dst.open(QIODevice::WriteOnly);
           dst.write(ret.data(), ret.size());
           dst.flush();
@@ -146,9 +161,7 @@ bool ExportDialog::export_device(const score::DocumentContext& ctx)
         root_model_node.set(obj->settings());
         auto ret = Pico::oscquery_generate_namespace(root_model_node);
         {
-          QFile dst{
-              m_destination->text() + QDir::separator()
-              + "ossia-oscquery.generated.hpp"};
+          QFile dst{destination + QDir::separator() + "ossia-oscquery.generated.hpp"};
           dst.open(QIODevice::WriteOnly);
           dst.write(ret.toUtf8());
           dst.flush();
@@ -161,7 +174,7 @@ bool ExportDialog::export_device(const score::DocumentContext& ctx)
   return false;
 }
 
-bool ExportDialog::export_scenario(const score::DocumentContext& ctx)
+bool export_scenario(const score::DocumentContext& ctx, QString destination)
 {
   // For template ossia-full-*
   Scenario::ScenarioDocumentModel& base
@@ -171,15 +184,15 @@ bool ExportDialog::export_scenario(const score::DocumentContext& ctx)
   if(baseInterval.processes.size() == 0)
     return false;
 
-  QString root = m_destination->text() + QDir::separator();
+  QString root = destination + QDir::separator();
   //
-  ProcessScenario ps{ctx};
-  {
-    QString scenario = ps.process(baseInterval);
-    QFile f(root + "src/ossia-scenario.generated.cpp");
-    f.open(QIODevice::WriteOnly);
-    f.write(scenario.toUtf8());
-  }
+  // ProcessScenario ps{ctx};
+  // {
+  //   QString scenario = ps.process(baseInterval);
+  //   QFile f(root + "src/ossia-scenario.generated.cpp");
+  //   f.open(QIODevice::WriteOnly);
+  //   f.write(scenario.toUtf8());
+  // }
   //
   // IntervalSplit is{ctx};
   // {
@@ -190,16 +203,16 @@ bool ExportDialog::export_scenario(const score::DocumentContext& ctx)
   //   f.write(task_text.toUtf8());
   // }
 
-  // ComponentBasedSplit p{ctx};
-  // {
-  //   auto res = p.process(baseInterval);
-  //   for(const auto& [devname, content] : res)
-  //   {
-  //     QFile f(root + "src/ossia-component." + devname + ".generated.cpp");
-  //     f.open(QIODevice::WriteOnly);
-  //     f.write(content.toUtf8());
-  //   }
-  // }
+  ComponentBasedSplit p{ctx};
+  {
+    auto res = p.process(baseInterval);
+    for(const auto& [filename, content] : res)
+    {
+      QFile f(root + "src/" + filename);
+      f.open(QIODevice::WriteOnly);
+      f.write(content.toUtf8());
+    }
+  }
   return true;
 }
 
@@ -219,9 +232,9 @@ bool ExportDialog::on_export()
   switch(static_cast<ExportMode>(m_mode->currentIndex()))
   {
     case RemoteControl:
-      return export_device(doc->context());
+      return export_device(doc->context(), m_destination->text());
     case FullScore:
-      return export_scenario(doc->context());
+      return export_scenario(doc->context(), m_destination->text());
   }
   return false;
 }
@@ -238,6 +251,17 @@ void ExportDialog::append_stderr(QString s)
 
 void ExportDialog::on_build()
 {
+  /*
+  TODOS
+      
+      - scheduler
+      - midi notes
+      - arpeggiator
+      - sound
+    - value_adapt for midi
+    - synth api
+    - synthimi: process -> create an interface for codewriter and overide
+*/
   if(!on_export())
     return;
 
@@ -271,5 +295,4 @@ void ExportDialog::on_build()
     delete p;
   }
 }
-
 }

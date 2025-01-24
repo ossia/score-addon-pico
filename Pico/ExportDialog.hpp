@@ -27,8 +27,6 @@ public:
 
 private:
   bool copy_template_folder();
-  bool export_device(const score::DocumentContext& ctx);
-  bool export_scenario(const score::DocumentContext& ctx);
   void append_stdout(QString);
   void append_stderr(QString);
 
@@ -38,4 +36,6 @@ private:
   QPlainTextEdit* m_textArea{};
   QDialogButtonBox* m_buttons{};
 };
+bool export_device(const score::DocumentContext& ctx, QString dest);
+bool export_scenario(const score::DocumentContext& ctx, QString dest);
 }

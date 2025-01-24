@@ -2,6 +2,8 @@
 
 #include <score/document/DocumentContext.hpp>
 
+#include <ossia/detail/hash_map.hpp>
+
 #include <Pico/DeviceIO.hpp>
 namespace Process
 {
@@ -22,6 +24,10 @@ struct Graph
 {
   GraphTasks tasks;
   std::vector<Process::ProcessModel*> topo_order;
+
+  ossia::hash_map<QString, ossia::flat_set<QStringList>> in_addresses;
+  ossia::hash_map<QString, ossia::flat_set<QStringList>> out_addresses;
+  ossia::hash_map<QString, ossia::flat_set<QStringList>> merged_addresses;
 };
 
 Graph processGraph(

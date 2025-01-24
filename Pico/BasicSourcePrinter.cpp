@@ -5,44 +5,71 @@
 #include <Process/Dataflow/Port.hpp>
 #include <Process/Process.hpp>
 
+#include <Explorer/DocumentPlugin/DeviceDocumentPlugin.hpp>
+#define OSSIA_PROTOCOL_SIMPLEIO 1
+#include <Protocols/OSC/OSCDevice.hpp>
+#include <Protocols/OSCQuery/OSCQueryDevice.hpp>
+#include <Protocols/SimpleIO/SimpleIODevice.hpp>
+
 #include <ossia/detail/algorithms.hpp>
 #include <ossia/detail/fmt.hpp>
 
+#include <QTextStream>
+
 #include <Pico/LibossiaGenerator.hpp>
 #include <Pico/SourcePrinter.hpp>
-
-#include <QTextStream>
 
 namespace Pico
 {
 static const std::string error_string = ":*:ERROR:*:";
 static const std::string todo_string = ":*:TODO:*:";
-static std::string
+static std::string address_to_model_accessor(const State::Address& addr)
+{
+  QString device = addr.device;
+  ossia::net::sanitize_name(device);
+
+  QString variable_name = addr.path.join("_");
+  ossia::net::sanitize_name(variable_name);
+
+  return fmt::format(
+      "ossia_model.{}.{}", device.toStdString(), variable_name.toStdString());
+}
+static std::optional<std::string>
 address_to_device_read_index(const State::Address& addr, std::string var)
 {
-  return fmt::format(
-      "do_device_read<\"{}\">({})", addr.toString().toStdString(), var);
+  if(addr.isSet())
+    return fmt::format(
+        "value_adapt({}.value, {})", address_to_model_accessor(addr), var);
+  return std::nullopt;
 }
 
-static std::string
+static std::optional<std::string>
 address_to_network_read_index(const State::Address& addr, std::string var)
 {
-  return fmt::format(
-      "do_network_read<\"{}\">({})", addr.toString().toStdString(), var);
+  if(addr.isSet())
+    return fmt::format(
+        "value_adapt({}.value, {})", address_to_model_accessor(addr), var);
+  return std::nullopt;
 }
 
-static std::string
+static std::optional<std::string>
 address_to_device_write_index(const State::Address& addr, std::string var)
 {
-  return fmt::format(
-      "do_device_write<\"{}\">({})", addr.toString().toStdString(), var);
+  if(addr.isSet())
+    return fmt::format(
+        "value_adapt({0}, {1}.value); {1}.changed = true;", var,
+        address_to_model_accessor(addr));
+  return std::nullopt;
 }
 
-static std::string
+static std::optional<std::string>
 address_to_network_write_index(const State::Address& addr, std::string var)
 {
-  return fmt::format(
-      "do_network_write<\"{}\">({})", addr.toString().toStdString(), var);
+  if(addr.isSet())
+    return fmt::format(
+        "value_adapt({0}, {1}.value); {1}.changed = true;", var,
+        address_to_model_accessor(addr));
+  return std::nullopt;
 }
 
 QString BasicSourcePrinter::printTask(
@@ -111,17 +138,15 @@ QString BasicSourcePrinter::printTask(
       {
         if (inl->address().address.device == device.name)
         {
-          c += fmt::format(
-              "{{ {}; }}\n",
-              address_to_device_read_index(
-                  inl->address().address, wr->accessInlet(inl->id())));
+          if(auto res = address_to_device_read_index(
+                 inl->address().address, wr->accessInlet(inl->id())))
+            c += fmt::format("{{ {}; }}\n", *res);
         }
         else if (!inl->address().address.device.isEmpty())
         {
-          c += fmt::format(
-              "{{ {}; }}\n",
-              address_to_network_read_index(
-                  inl->address().address, wr->accessInlet(inl->id())));
+          if(auto res = address_to_network_read_index(
+                 inl->address().address, wr->accessInlet(inl->id())))
+            c += fmt::format("{{ {}; }}\n", *res);
         }
       }
 
@@ -180,17 +205,15 @@ QString BasicSourcePrinter::printTask(
       {
         if (inl->address().address.device == device.name)
         {
-          c += fmt::format(
-              "{{ {}; }}\n",
-              address_to_device_write_index(
-                  inl->address().address, wr->accessOutlet(inl->id())));
+          if(auto res = address_to_device_write_index(
+                 inl->address().address, wr->accessOutlet(inl->id())))
+            c += fmt::format("{{ {}; }}\n", *res);
         }
         else if (!inl->address().address.device.isEmpty())
         {
-          c += fmt::format(
-              "{{ {}; }}\n",
-              address_to_network_write_index(
-                  inl->address().address, wr->accessOutlet(inl->id())));
+          if(auto res = address_to_network_write_index(
+                 inl->address().address, wr->accessOutlet(inl->id())))
+            c += fmt::format("{{ {}; }}\n", *res);
         }
       }
 
@@ -207,20 +230,21 @@ QString BasicSourcePrinter::printTask(
 }
 
 QString BasicSourcePrinter::print(
-    const Device& device,
-    const score::DocumentContext& context,
-    const GraphTasks& components)
+    const Device& device, const score::DocumentContext& context, const Graph& g)
 {
   // 4. Print source code
   std::string source;
   source += Pico::defaultIncludesGraph();
+  source += fmt::format(
+      R"(#include "{}.ossia-model.generated.hpp")", device.name.toStdString());
 
+  source += printDeviceInitialization(device).toStdString();
   std::string task_creation;
   int task_n = 0;
 
-  qDebug() << " <<<<>>>> there are " << components.size() << " components ";
+  qDebug() << " <<<<>>>> there are " << g.tasks.size() << " components ";
   ;
-  for (auto& comp : components)
+  for(auto& comp : g.tasks)
   {
     source += "\n";
     source += fmt::format("static void ossia_task_{}() {{\n", task_n);
@@ -245,10 +269,149 @@ extern "C" void ossia_run_graph(void)
 
   return QString::fromStdString(source);
 }
+
+static constexpr auto data_model_template = R"_(
+struct ossia_model_t
+{{
+    {}
+}} ossia_model;
+//  struct
+//  {
+//    int foo;
+//    float bar;
+//  } net;
+//  struct
+//  {
+//    int foo;
+//    float bar;
+//  } dev;
+//  struct
+//  {
+//    uint32_t bar : 1;
+//  } net_bitset;
+//  struct
+//  {
+//    uint32_t bar : 1;
+//  } dev_bitset;
+
+
+void do_read(auto& dest, auto& value)
+{{
+  value_adapt(value, ossia_model.net.foo);
+  if constexpr(0) {{ }}
+  {}
+  
+  // else if constexpr(std::string_view{str} == "osc:/foo")
+  //   value_adapt(value, ossia_model.net.foo);
+}
+
+template <auto str>
+void do_device_read(auto& value)
+{
+  if constexpr(0) {{ }}
+  {}
+  
+}
+template <auto str>
+void do_network_write(const auto& value)
+{
+  if constexpr(0) {{ }}
+  {}
+  
+}
+template <auto str>
+void do_device_write(auto& value)
+{
+  if constexpr(0) {{ }}
+  {}
+  
+  // else if constexpr(std::string_view{str} == "gpio:/bar")
+  // {
+  //   value_adapt(ossia_model.dev.bar, value);
+  //   ossia_model.dev_bitset.bar = 1;
+  // }
+}
+)_";
+
 QString BasicSourcePrinter::printDeviceInitialization(const Device& device)
 {
   QString str;
-
   return str;
+}
+
+QString BasicSourcePrinter::printDeviceCommunication(
+    const Device& device, const score::DocumentContext& context, const Graph& components)
+{
+  auto& device_list = context.plugin<Explorer::DeviceDocumentPlugin>().list();
+  QString file;
+  // ossia_read_pins
+  {
+    std::string f;
+
+    f += "void ossia_read_pins() {\n";
+    // FIXME codewriter interface on devices
+    for(auto& [devname, paths] : components.in_addresses)
+    {
+      if(auto* d = device_list.findDevice(devname))
+      {
+        if(auto proto = qobject_cast<Protocols::SimpleIODevice*>(d))
+        {
+        }
+      }
+    }
+    for(auto& e : device.ios)
+    {
+      // If device
+    }
+
+    f += "}\n";
+  }
+  // ossia_read_net
+  // ossia_run_graph
+
+  // ossia_write_pins
+  // ossia_write_net
+
+  return file;
+}
+
+QString BasicSourcePrinter::printDataModel(const Device& device, const Graph& g)
+{
+  QString str;
+
+  // 2. Generate a model struct
+  QString model_struct;
+  for(const auto& [k, v] : g.merged_addresses)
+  {
+    QString structdef = "struct {\n";
+
+    for(const auto& vv : v)
+    {
+      std::string variable_name = vv.join("_").toStdString();
+      ossia::net::sanitize_name(variable_name);
+      structdef += fmt::format(
+          "struct {{ {0} value = {{}}; bool changed = false; }} {1};\n", "float",
+          variable_name);
+    }
+    structdef += "} ";
+
+    QString device_name = k;
+    ossia::net::sanitize_name(device_name);
+    structdef += k;
+    structdef += ";\n";
+
+    model_struct += structdef;
+  }
+
+  // 3. Generate the accessor functions
+
+  return QString::fromStdString(fmt::format(
+      R"_(#pragma once
+struct ossia_model_t
+{{
+    {}
+}} ossia_model;
+)_",
+      model_struct.toStdString()));
 }
 }

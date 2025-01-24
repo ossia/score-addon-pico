@@ -56,6 +56,16 @@ public:
   void play() { }
 };
 */
+void AppPlug::on_loadedDocument(score::Document& doc)
+{
+  return;
+  //score::addDocumentPlugin<DocPlug>(doc);
+  export_scenario(doc.context(), "/tmp/test");
+  QTimer::singleShot(100, qApp, [] {
+    qApp->exit();
+    std::terminate();
+  });
+}
 
 void AppPlug::on_createdDocument(score::Document& doc)
 {

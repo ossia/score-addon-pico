@@ -14,14 +14,16 @@ struct Device;
 class BasicSourcePrinter
 {
 public:
-    QString print(
-        const Device& device,
-        const score::DocumentContext& context,
-        const GraphTasks& components);
-    QString printDeviceInitialization(const Device& device);
-    QString printTask(
-        const Device& device,
-        const score::DocumentContext& context,
-        const std::vector<Process::ProcessModel*>& procs);
+  QString print(
+      const Device& device, const score::DocumentContext& context,
+      const Graph& components);
+  QString printDeviceInitialization(const Device& device);
+  QString printDataModel(const Device& device, const Graph& components);
+  QString printDeviceCommunication(
+      const Device& device, const score::DocumentContext& context,
+      const Graph& components);
+  QString printTask(
+      const Device& device, const score::DocumentContext& context,
+      const std::vector<Process::ProcessModel*>& procs);
 };
 }
