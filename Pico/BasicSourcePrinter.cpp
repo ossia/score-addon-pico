@@ -262,6 +262,7 @@ QString BasicSourcePrinter::print(
       R"_(
 extern "C" void ossia_run_graph(void)
 {{
+  g_tick.frames += 44100. * 0.1;
   {}
 }}
 )_",

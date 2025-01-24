@@ -46,6 +46,8 @@ static constexpr void avnd_call(auto& proc)
     proc(g_tick.frames);
   else if constexpr(requires { proc(); })
     proc();
+  else
+    static_assert(std::is_void_v<decltype(proc)>);
 }
 using namespace ao;
 struct Dummy

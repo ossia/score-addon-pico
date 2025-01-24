@@ -314,9 +314,35 @@ public:
   {
   } outputs;
 
+  synth the_synth;
   halp::setup settings;
   void prepare(halp::setup info) { settings = info; }
-  using tick = halp::tick;
-  void operator()(halp::tick t) { }
+  void operator()(int frames)
+  {
+    for(auto& mess : inputs.midi.midi_messages)
+    {
+      switch(mess.bytes[0])
+      {
+        case 144: {
+          float pitch = 440.f * std::exp2((mess.bytes[1] - 69) / 12.);
+
+          the_synth.voice1a.frequency(pitch);
+          the_synth.voice1b.frequency(pitch);
+          the_synth.voice1env.amplitude(0.5, 1);
+          break;
+        }
+        case 128:
+          the_synth.voice1env.amplitude(0.0, 1);
+          break;
+      }
+
+      // voice1env.amplitude(.05, 1);
+      // voice1a.frequency(rand() % 100 + 200);
+      // voice1b.frequency(rand() % 100 + 400);
+      // voice1n.amplitude(rand() % 100 / 100.f);
+      // delay(200);
+      // voice1env.amplitude(0, 0);
+    }
+  }
 };
 }
