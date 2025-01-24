@@ -3,7 +3,7 @@
 
 #include <Fx/LFO_v2.hpp>
 #include <Fx/PitchToValue.hpp>
-#include <Fx/VelToNote.hpp>
+#include <Fx/VelToNote_mono.hpp>
 
 #include <Advanced/Utilities/Automation.hpp>
 #include <Advanced/Utilities/ColorAutomation.hpp>
@@ -68,19 +68,88 @@ struct static_string
   char value[N];
 };
 
-static inline constexpr void value_adapt(auto&& to, auto&& from)
+template <typename To, typename From>
+static inline constexpr void value_adapt(To&& to, From&& from)
 {
-  to = from;
+  if constexpr(requires {
+                 to.value;
+                 from.value;
+               })
+  {
+    if constexpr(requires { to.value = *from.value; })
+    {
+      to.value = *from.value;
+    }
+    else
+    {
+      to.value = from.value;
+    }
+  }
+  else if constexpr(requires { from.value; })
+  {
+    if constexpr(requires { *from.value; })
+
+      to = *from.value;
+    else
+      to = from.value;
+  }
+  else if constexpr(requires { to.value; })
+  {
+    to.value = from;
+  }
+  else
+  {
+    to = from;
+  }
+
+  // FIXME
+  if constexpr(requires { *from.value; })
+    from.value = std::nullopt;
 }
+
+template<typename T>
+static inline constexpr void
+midi_adapt(T&& to, T&& from)
+{
+  to = std::forward<T>(from);
+}
+static inline  void
+midi_adapt(halp::midi_msg& to, libremidi::message& from)
+{
+  to.timestamp = from.timestamp;
+  to.bytes.assign(from.bytes.begin(), from.bytes.end());
+}
+
 static inline constexpr void
 value_adapt(avnd::midi_port auto&& to, avnd::midi_port auto&& from)
 {
-  to = from;
+  to.midi_messages.clear();
+  for(auto& m : from.midi_messages)
+  {
+    using to_messages_type =  std::remove_cvref_t<decltype(to.midi_messages)>;
+    typename to_messages_type::value_type to_msg;
+    midi_adapt(to_msg, m);
+    to.midi_messages.push_back(std::move(to_msg));
+  }
+  from.midi_messages.clear(); // FIXME
 }
+
 static inline constexpr void
 value_adapt(avnd::parameter auto&& to, avnd::parameter auto&& from)
 {
   to.value = from.value;
+}
+template <typename T>
+static inline constexpr void
+value_adapt(avnd::parameter auto& to, exprtk_arithmetic& from)
+{
+  to.value = from;
+}
+template <typename T>
+static inline constexpr void
+value_adapt(exprtk_arithmetic& to, avnd::parameter auto& from)
+{
+  to = from.value;
 }
 template <typename T>
 static inline constexpr void value_adapt(auto& to, std::optional<T>& from)

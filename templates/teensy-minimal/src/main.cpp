@@ -7,18 +7,19 @@
 #include <Arduino.h>
 void setup()
 {
-  ossia_init_board();
+  // ossia_init_board();
 }
 
+extern "C" int _write(...) { }
 void loop()
 {
-  ossia_read_pins();
-  ossia_read_net();
+  // ossia_read_pins();
+  // ossia_read_net();
 
   ossia_run_graph();
 
-  ossia_write_pins();
-  ossia_write_net();
+  // ossia_write_pins();
+  // ossia_write_net();
 
   delay(100);
 }
