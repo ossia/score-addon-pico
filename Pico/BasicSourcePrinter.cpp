@@ -117,6 +117,12 @@ QString BasicSourcePrinter::printTask(
           wr->variable,
           init,
           name);
+
+      // FIXME put in a class instead to get a single easy init
+      c += fmt::format(
+          "static const auto prepare_{0} = [] (auto&& f){{ if constexpr(requires {{ "
+          "f.prepare(g_setup); }}) f.prepare(g_setup); return 0; }} ({0});",
+          wr->variable);
       index++;
     }
   }
@@ -262,7 +268,7 @@ QString BasicSourcePrinter::print(
       R"_(
 extern "C" void ossia_run_graph(void)
 {{
-  g_tick.frames += 44100. * 0.1;
+  g_tick.update_timings();
   {}
 }}
 )_",

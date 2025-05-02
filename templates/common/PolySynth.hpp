@@ -324,7 +324,7 @@ public:
       switch(mess.bytes[0])
       {
         case 144: {
-          float pitch = 440.f * std::exp2((mess.bytes[1] - 69) / 12.);
+          const float pitch = 440.f * std::exp2((mess.bytes[1] - 69) / 12.);
 
           the_synth.voice1a.frequency(pitch);
           the_synth.voice1b.frequency(pitch);

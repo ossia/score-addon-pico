@@ -74,7 +74,7 @@ struct exprtk_arithmetic
 struct ExprtkMapper_iS_oS
 {
   struct I {
-    struct P0 { exprtk_arithmetic value; } in;
+    struct P0 { std::optional<exprtk_arithmetic> value; } in;
     struct P1 { exprtk_arithmetic value; } a;
     struct P2 { exprtk_arithmetic value; } b;
     struct P3 { exprtk_arithmetic value; } c;
@@ -85,10 +85,11 @@ struct ExprtkMapper_iS_oS
 
   struct {
 
-    struct {  exprtk_arithmetic value; } out;
+    struct {  std::optional<exprtk_arithmetic> value; } out;
   } outputs;
 };
 
+// FIXME optional
 struct ExprtkMapper_iS_oV
 {
   struct I {

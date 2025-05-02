@@ -9,6 +9,7 @@
 #include <Advanced/Utilities/ColorAutomation.hpp>
 #include <Advanced/Utilities/Smooth.hpp>
 #include <avnd/common/export.hpp>
+#include <avnd/common/for_nth.hpp>
 #include <avnd/introspection/input.hpp>
 #include <avnd/introspection/messages.hpp>
 #include <avnd/introspection/output.hpp>
@@ -16,7 +17,9 @@
 #include <avnd/wrappers/avnd.hpp>
 #include <avnd/wrappers/controls.hpp>
 #include <avnd/wrappers/metadatas.hpp>
+#include <halp/audio.hpp>
 
+#include <Arduino.h>
 #include <cmath>
 
 #include <cinttypes>
@@ -25,10 +28,39 @@
 #include <cstring>
 
 #include <avnd/../../examples/Advanced/Utilities/Math.hpp>
+static constexpr int sample_rate = 44100;
+static constexpr halp::setup g_setup{
+    .input_channels = 0, .output_channels = 0, .frames = 128, .rate = sample_rate};
+
 struct g_tick_t
 {
+  int tick_micros{};
   int frames{};
   float relative_position{};
+
+  int64_t prev_micros{};
+
+  int64_t total_micros{};
+  void update_timings()
+  {
+    auto t = micros();
+    if(prev_micros > t)
+    {
+      auto remaining_prev = std::numeric_limits<decltype(t)>::max() - prev_micros;
+      auto total_time = remaining_prev + t;
+
+      frames = sample_rate * total_time / 1e6;
+      tick_micros = total_time;
+    }
+    else
+    {
+      frames = sample_rate * (t - prev_micros) / 1e6;
+      tick_micros = t - prev_micros;
+    }
+    prev_micros = t;
+
+    total_micros += tick_micros;
+  }
 } g_tick;
 
 static int get_frames(const g_tick_t& tk)
@@ -40,14 +72,54 @@ static float get_relative_position(const g_tick_t& tk)
   return tk.relative_position;
 }
 
-static constexpr void avnd_call(auto& proc)
+static constexpr void avnd_clean_inputs(auto& proc)
+{
+  avnd::for_each_field_ref(proc.inputs, [](auto& p) {
+    if constexpr(requires { p.value = std::nullopt; })
+      p.value = std::nullopt;
+  });
+}
+
+static constexpr void avnd_clean_outputs(auto& proc)
+{
+  avnd::for_each_field_ref(proc.outputs, [](auto& p) {
+    if constexpr(requires { p.value = std::nullopt; })
+    {
+      p.value = std::nullopt;
+    }
+  });
+}
+
+template <typename T>
+static constexpr void avnd_call(T& proc)
 {
   if constexpr(requires { proc(g_tick.frames); })
     proc(g_tick.frames);
   else if constexpr(requires { proc(); })
     proc();
   else
-    static_assert(std::is_void_v<decltype(proc)>);
+  {
+    using tick_type = T::tick;
+    tick_type tk;
+    tk.frames = g_tick.frames;
+
+    if constexpr(requires { tk.start_in_flicks; })
+      tk.start_in_flicks = g_tick.total_micros * 705.6;
+    if constexpr(requires { tk.end_in_flicks; })
+      tk.end_in_flicks = (g_tick.total_micros + g_tick.tick_micros) * 705.6;
+    if constexpr(requires { tk.relative_position; })
+      tk.relative_position = 0.;
+    if constexpr(requires { tk.parent_duration; })
+      tk.parent_duration = 0;
+    if constexpr(requires { tk.speed; })
+      tk.speed = 1.;
+    if constexpr(requires { tk.tempo; })
+      tk.tempo = 120.;
+
+    proc(tk);
+  }
+  //else
+  //  static_assert(std::is_void_v<decltype(proc)>);
 }
 using namespace ao;
 struct Dummy
@@ -80,7 +152,8 @@ static inline constexpr void value_adapt(To&& to, From&& from)
   {
     if constexpr(requires { to.value = *from.value; })
     {
-      to.value = *from.value;
+      if(from.value)
+        to.value = *from.value;
     }
     else
     {
@@ -89,11 +162,13 @@ static inline constexpr void value_adapt(To&& to, From&& from)
   }
   else if constexpr(requires { from.value; })
   {
-    if constexpr(requires { *from.value; })
-
-      to = *from.value;
-    else
+    if constexpr(requires { *from.value; }){
+      if(from.value)
+        to = *from.value;
+    }
+    else {
       to = from.value;
+    }
   }
   else if constexpr(requires { to.value; })
   {
@@ -109,14 +184,12 @@ static inline constexpr void value_adapt(To&& to, From&& from)
     from.value = std::nullopt;
 }
 
-template<typename T>
-static inline constexpr void
-midi_adapt(T&& to, T&& from)
+template <typename T>
+static inline constexpr void midi_adapt(T&& to, T&& from)
 {
   to = std::forward<T>(from);
 }
-static inline  void
-midi_adapt(halp::midi_msg& to, libremidi::message& from)
+static inline void midi_adapt(halp::midi_msg& to, libremidi::message& from)
 {
   to.timestamp = from.timestamp;
   to.bytes.assign(from.bytes.begin(), from.bytes.end());
@@ -128,7 +201,7 @@ value_adapt(avnd::midi_port auto&& to, avnd::midi_port auto&& from)
   to.midi_messages.clear();
   for(auto& m : from.midi_messages)
   {
-    using to_messages_type =  std::remove_cvref_t<decltype(to.midi_messages)>;
+    using to_messages_type = std::remove_cvref_t<decltype(to.midi_messages)>;
     typename to_messages_type::value_type to_msg;
     midi_adapt(to_msg, m);
     to.midi_messages.push_back(std::move(to_msg));
