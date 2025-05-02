@@ -108,6 +108,7 @@ QString BasicSourcePrinter::printTask(
     int index = 0;
     for (auto& wr : codes)
     {
+      c += fmt::format("\n");
       std::string name = procs[index]->metadata().getName().toStdString();
       std::string init = wr->initializer();
       wr->variable = fmt::format("p{}", index);
@@ -120,8 +121,8 @@ QString BasicSourcePrinter::printTask(
 
       // FIXME put in a class instead to get a single easy init
       c += fmt::format(
-          "static const auto prepare_{0} = [] (auto&& f){{ if constexpr(requires {{ "
-          "f.prepare(g_setup); }}) f.prepare(g_setup); return 0; }} ({0});",
+          "static const auto prepare_{0} = [] (auto&& f) {{ if constexpr(requires {{ "
+          "f.prepare(g_setup); }}) f.prepare(g_setup); return 0; }} ({0});\n",
           wr->variable);
       index++;
     }
@@ -157,6 +158,7 @@ QString BasicSourcePrinter::printTask(
       }
 
       process_index++;
+      c += fmt::format("\n");
     }
   }
 

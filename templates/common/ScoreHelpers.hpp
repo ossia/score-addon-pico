@@ -1,6 +1,8 @@
 #pragma once
 #include "ExprtkMapper.hpp"
 
+#include <Fx/Arpeggiator.hpp>
+#include <Fx/Chord.hpp>
 #include <Fx/LFO_v2.hpp>
 #include <Fx/PitchToValue.hpp>
 #include <Fx/VelToNote_mono.hpp>
@@ -40,6 +42,7 @@ struct g_tick_t
 
   int64_t prev_micros{};
 
+  int64_t total_frames{};
   int64_t total_micros{};
   void update_timings()
   {
@@ -60,6 +63,7 @@ struct g_tick_t
     prev_micros = t;
 
     total_micros += tick_micros;
+    total_frames += frames;
   }
 } g_tick;
 
@@ -103,18 +107,39 @@ static constexpr void avnd_call(T& proc)
     tick_type tk;
     tk.frames = g_tick.frames;
 
+    if constexpr(requires { tk.position_in_frames; })
+      tk.position_in_frames = g_tick.total_frames;
+    if constexpr(requires { tk.position_in_nanoseconds; })
+      tk.position_in_nanoseconds = g_tick.total_micros * 1e3;
     if constexpr(requires { tk.start_in_flicks; })
       tk.start_in_flicks = g_tick.total_micros * 705.6;
     if constexpr(requires { tk.end_in_flicks; })
       tk.end_in_flicks = (g_tick.total_micros + g_tick.tick_micros) * 705.6;
     if constexpr(requires { tk.relative_position; })
-      tk.relative_position = 0.;
+      tk.relative_position = 0.; // FIXME
     if constexpr(requires { tk.parent_duration; })
-      tk.parent_duration = 0;
+      tk.parent_duration = 0; // FIXME
     if constexpr(requires { tk.speed; })
       tk.speed = 1.;
     if constexpr(requires { tk.tempo; })
       tk.tempo = 120.;
+    if constexpr(requires { tk.start_position_in_quarters; })
+    {
+      // Tempo = 120 -> 1 quarter note = 1/2 second
+      constexpr double quarter_note_duration_in_seconds = 60. / 120.;
+      if constexpr(requires { tk.start_position_in_quarters; })
+        tk.start_position_in_quarters
+            = quarter_note_duration_in_seconds * g_tick.total_micros / 1e6;
+      if constexpr(requires { tk.end_position_in_quarters; })
+        tk.end_position_in_quarters = quarter_note_duration_in_seconds
+                                      * (g_tick.total_micros + g_tick.tick_micros) / 1e6;
+      if constexpr(requires { tk.last_signature_change; })
+        tk.last_signature_change = 120.;
+      if constexpr(requires { tk.bar_at_start; })
+        tk.bar_at_start = 0.;
+      if constexpr(requires { tk.bar_at_end; })
+        tk.bar_at_end = 0.;
+    }
 
     proc(tk);
   }

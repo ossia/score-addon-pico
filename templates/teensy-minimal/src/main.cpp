@@ -13,7 +13,8 @@ void setup()
 extern "C" int _write(...) { }
 void loop()
 {
-  Serial.begin(115200);
+  // note: enabling Serial makes time very slow when the serial monitor is not connected
+  // Serial.begin(115200);
   // ossia_read_pins();
   // ossia_read_net();
 
@@ -22,5 +23,5 @@ void loop()
   // ossia_write_pins();
   // ossia_write_net();
 
-  delay(1);
+  delayMicroseconds(1000);
 }
