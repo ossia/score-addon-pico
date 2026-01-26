@@ -236,19 +236,19 @@ value_adapt(avnd::midi_port auto&& to, avnd::midi_port auto&& from)
 }
 
 static inline constexpr void
-value_adapt(avnd::parameter auto&& to, avnd::parameter auto&& from)
+value_adapt(avnd::parameter_port auto&& to, avnd::parameter_port auto&& from)
 {
   to.value = from.value;
 }
 template <typename T>
 static inline constexpr void
-value_adapt(avnd::parameter auto& to, exprtk_arithmetic& from)
+value_adapt(avnd::parameter_port auto& to, exprtk_arithmetic& from)
 {
   to.value = from;
 }
 template <typename T>
 static inline constexpr void
-value_adapt(exprtk_arithmetic& to, avnd::parameter auto& from)
+value_adapt(exprtk_arithmetic& to, avnd::parameter_port auto& from)
 {
   to = from.value;
 }

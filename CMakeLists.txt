@@ -96,7 +96,7 @@ avnd_score_plugin_add(
 )
 avnd_score_plugin_add(
   BASE_TARGET score_addon_pico
-  SOURCES "${AVND_FOLDER}/examples/Advanced/Utilities/Soundfile.hpp"
+  SOURCES "${AVND_FOLDER}/examples/Advanced/Audio/Soundfile.hpp"
   TARGET soundfile
   MAIN_CLASS Soundfile
   NAMESPACE ao
