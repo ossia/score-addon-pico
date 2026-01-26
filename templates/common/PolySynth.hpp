@@ -324,10 +324,13 @@ public:
       switch(mess.bytes[0])
       {
         case 144: {
-          const float pitch = 440.f * std::exp2((mess.bytes[1] - 69) / 12.);
+          const float pitch0
+              = 440.f * std::exp2((mess.bytes[1] - 69 + inputs.osc0_pitch.value) / 12.);
+          const float pitch1
+              = 440.f * std::exp2((mess.bytes[1] - 69 + inputs.osc1_pitch.value) / 12.);
 
-          the_synth.voice1a.frequency(pitch);
-          the_synth.voice1b.frequency(pitch);
+          the_synth.voice1a.frequency(pitch0);
+          the_synth.voice1b.frequency(pitch1);
           the_synth.voice1env.amplitude(0.5, 1);
           break;
         }

@@ -64,6 +64,7 @@ struct g_tick_t
 
     total_micros += tick_micros;
     total_frames += frames;
+    relative_position += 0.001;
   }
 } g_tick;
 
@@ -116,7 +117,7 @@ static constexpr void avnd_call(T& proc)
     if constexpr(requires { tk.end_in_flicks; })
       tk.end_in_flicks = (g_tick.total_micros + g_tick.tick_micros) * 705.6;
     if constexpr(requires { tk.relative_position; })
-      tk.relative_position = 0.; // FIXME
+      tk.relative_position = g_tick.relative_position; // FIXME
     if constexpr(requires { tk.parent_duration; })
       tk.parent_duration = 0; // FIXME
     if constexpr(requires { tk.speed; })
