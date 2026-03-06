@@ -38,8 +38,10 @@ static std::optional<std::string>
 address_to_device_read_index(const State::Address& addr, std::string var)
 {
   if(addr.isSet())
+  {
     return fmt::format(
-        "value_adapt({}.value, {})", address_to_model_accessor(addr), var);
+        "value_adapt({0}, {1}.value)", var, address_to_model_accessor(addr));
+  }
   return std::nullopt;
 }
 
@@ -47,8 +49,10 @@ static std::optional<std::string>
 address_to_network_read_index(const State::Address& addr, std::string var)
 {
   if(addr.isSet())
+  {
     return fmt::format(
-        "value_adapt({}.value, {})", address_to_model_accessor(addr), var);
+        "value_adapt({0}, {1}.value)", var, address_to_model_accessor(addr));
+  }
   return std::nullopt;
 }
 
@@ -56,9 +60,11 @@ static std::optional<std::string>
 address_to_device_write_index(const State::Address& addr, std::string var)
 {
   if(addr.isSet())
+  {
     return fmt::format(
-        "value_adapt({0}, {1}.value); {1}.changed = true;", var,
-        address_to_model_accessor(addr));
+        "value_adapt({0}.value, {1}); {0}.changed = true;",
+        address_to_model_accessor(addr), var);
+  }
   return std::nullopt;
 }
 
@@ -66,9 +72,11 @@ static std::optional<std::string>
 address_to_network_write_index(const State::Address& addr, std::string var)
 {
   if(addr.isSet())
+  {
     return fmt::format(
-        "value_adapt({0}, {1}.value); {1}.changed = true;", var,
-        address_to_model_accessor(addr));
+        "value_adapt({0}.value, {1}); {0}.changed = true;",
+        address_to_model_accessor(addr), var);
+  }
   return std::nullopt;
 }
 
@@ -109,9 +117,9 @@ QString BasicSourcePrinter::printTask(
     for (auto& wr : codes)
     {
       c += fmt::format("\n");
+      wr->variable = fmt::format("p{}", index);
       std::string name = procs[index]->metadata().getName().toStdString();
       std::string init = wr->initializer();
-      wr->variable = fmt::format("p{}", index);
       c += fmt::format(
           "static {} {} {{\n{}\n}}; // {}\n",
           wr->typeName(),

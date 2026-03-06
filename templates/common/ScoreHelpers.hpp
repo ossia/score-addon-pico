@@ -10,6 +10,7 @@
 #include <Advanced/Utilities/Automation.hpp>
 #include <Advanced/Utilities/ColorAutomation.hpp>
 #include <Advanced/Utilities/Smooth.hpp>
+#include <Puara/Scaler.hpp>
 #include <avnd/common/export.hpp>
 #include <avnd/common/for_nth.hpp>
 #include <avnd/introspection/input.hpp>

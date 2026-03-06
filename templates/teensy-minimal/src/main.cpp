@@ -1,8 +1,12 @@
+#if __has_include(<Audio.h>)
 #include "PolySynth.hpp"
+#endif
 #include "ossia_embedded_api.hpp"
 #include "pico.ossia-graph.generated.hpp"
 
+#if __has_include(<Audio.h>)
 #include <Audio.h>
+#endif
 
 #include <Arduino.h>
 void setup()
