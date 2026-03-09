@@ -105,6 +105,32 @@ ExportDialog::ExportDialog(AppPlug& plug, QWidget* parent)
   lay->addWidget(m_buttons);
 }
 
+static QString score_source_dir()
+{
+  QDir d(PICO_SOURCE_DIR);
+  d.cdUp(); // addons
+  d.cdUp(); // src
+  d.cdUp(); // score root
+  return d.absolutePath();
+}
+
+static void substitute_template_variables(const QString& dst)
+{
+  QString ini_path = dst + QDir::separator() + "platformio.ini";
+  QFile f{ini_path};
+  if(!f.open(QIODevice::ReadWrite))
+    return;
+
+  QByteArray content = f.readAll();
+  if(content.contains("@SCORE_SOURCE_DIR@"))
+  {
+    content.replace("@SCORE_SOURCE_DIR@", score_source_dir().toUtf8());
+    f.seek(0);
+    f.resize(0);
+    f.write(content);
+  }
+}
+
 bool ExportDialog::copy_template_folder()
 {
   auto src = m_template->text();
@@ -119,6 +145,7 @@ bool ExportDialog::copy_template_folder()
   }
 
   copy_folder_recursively(src, dst);
+  substitute_template_variables(dst);
   return true;
 }
 
