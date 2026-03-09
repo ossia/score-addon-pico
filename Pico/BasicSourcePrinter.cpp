@@ -588,9 +588,10 @@ QString BasicSourcePrinter::printDataModel(const Device& device, const Graph& g)
       auto it = model_field_types.find(key);
       const char* type = (it != model_field_types.end()) ? it->second.c_str() : "float";
 
-      structdef += fmt::format(
-          "struct {{ {0} value = {{}}; bool changed = false; }} {1};\n", type,
-          variable_name);
+      structdef += QString::fromStdString(
+          fmt::format(
+              "struct {{ {0} value = {{}}; bool changed = false; }} {1};\n", type,
+              variable_name));
     }
     structdef += "} ";
 

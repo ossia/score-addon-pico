@@ -113,7 +113,10 @@
 // #include <Ports/LitterPower/CCC.hpp>
 //#include <Ports/WaveDigitalFilters/PassiveLPF.hpp>
 //#include <Ports/WaveDigitalFilters/VoltageDivider.hpp>
+#include <Puara/EdaRtFeatures.hpp>
 #include <Puara/Scaler.hpp>
+
+#include <Puara/EdaRtFeatures.cpp>
 // #include <Raw/Addition.hpp>
 // #include <Raw/Aggregate.hpp>
 // #include <Raw/AllPortsTypes.hpp>
