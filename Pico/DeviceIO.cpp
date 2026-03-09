@@ -68,6 +68,21 @@ QString DeviceIO::printInitialization() const
           this->pin));
       return str;
     }
+    case Neopixel:
+    {
+      QString str;
+      int num_pixels = 1;
+      if(auto it = this->properties.find("num_pixels"); it != this->properties.end())
+        num_pixels = it->second.toInt();
+      str = QString::fromStdString(fmt::format(
+          R"_(
+  // NeoPixel on pin {}
+  Adafruit_NeoPixel ossia_neopixel_{}({}, {}, NEO_GRB + NEO_KHZ800);
+  ossia_neopixel_{}.begin();
+)_",
+          this->pin, this->pin, num_pixels, this->pin, this->pin));
+      return str;
+    }
     case Call:
       break;
     case Variable:

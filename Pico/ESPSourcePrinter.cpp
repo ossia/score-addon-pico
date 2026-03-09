@@ -36,6 +36,10 @@ static std::string address_to_device_read_index(const State::Address& addr)
   {
     return fmt::format("adc1_get_raw(ADC1_CHANNEL_{})", num);
   }
+  else if (addr.path.startsWith("neopixel"))
+  {
+    return fmt::format(":*:NEOPIXEL_READ_NOT_SUPPORTED:*:");
+  }
   return todo_string_esp;
 }
 
@@ -64,6 +68,16 @@ address_to_device_write_index(const State::Address& addr, std::string var)
         R"_(
     ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_{0}, {1});
     ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_{0});
+)_",
+        num,
+        var);
+  }
+  else if (addr.path.startsWith("neopixel"))
+  {
+    return fmt::format(
+        R"_(
+    // TODO: map neopixel data from variable {1} to neopixel strip on pin {0}
+    // ossia_neopixel_{0}.show();
 )_",
         num,
         var);
@@ -241,6 +255,7 @@ QString ESPSourcePrinter::print(
 #include <driver/adc.h>
 #include <driver/gpio.h>
 #include <driver/ledc.h>
+#include <Adafruit_NeoPixel.h>
 
 #include <esp_err.h>
 

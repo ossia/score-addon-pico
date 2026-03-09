@@ -6,10 +6,12 @@
 #include <Process/Process.hpp>
 
 #include <Explorer/DocumentPlugin/DeviceDocumentPlugin.hpp>
+
 #define OSSIA_PROTOCOL_SIMPLEIO 1
 #include <Protocols/OSC/OSCDevice.hpp>
 #include <Protocols/OSCQuery/OSCQueryDevice.hpp>
 #include <Protocols/SimpleIO/SimpleIODevice.hpp>
+#include <Protocols/SimpleIO/SimpleIOSpecificSettings.hpp>
 
 #include <ossia/detail/algorithms.hpp>
 #include <ossia/detail/fmt.hpp>
@@ -119,19 +121,42 @@ QString BasicSourcePrinter::printTask(
       c += fmt::format("\n");
       wr->variable = fmt::format("p{}", index);
       std::string name = procs[index]->metadata().getName().toStdString();
+      std::string type = wr->typeName();
       std::string init = wr->initializer();
       c += fmt::format(
           "static {} {} {{\n{}\n}}; // {}\n",
-          wr->typeName(),
+          type,
           wr->variable,
           init,
           name);
 
-      // FIXME put in a class instead to get a single easy init
+      // Callback output storage (for processes with halp::callback outputs)
       c += fmt::format(
-          "static const auto prepare_{0} = [] (auto&& f) {{ if constexpr(requires {{ "
-          "f.prepare(g_setup); }}) f.prepare(g_setup); return 0; }} ({0});\n",
+          "static avnd_callback_storage_t<{}> {}_cbs;\n",
+          type,
           wr->variable);
+
+      // One-time initialization: prepare(), dynamic port resizing, callback binding
+      c += fmt::format(
+          "static bool prepared_{0} = false;\n"
+          "if(!prepared_{0}) {{\n"
+          "  do_prepare({0}, g_setup);\n",
+          wr->variable);
+
+      // Initialize dynamic ports (resize port vectors to fixed compile-time size)
+      if(auto post = wr->postInitialize(); !post.empty())
+        c += "  " + post;
+
+      // Bind callback outputs to storage
+      c += fmt::format(
+          "  avnd_init_callbacks({0}, {0}_cbs);\n",
+          wr->variable);
+
+      c += fmt::format(
+          "  prepared_{0} = true;\n"
+          "}}\n",
+          wr->variable);
+
       index++;
     }
   }
@@ -201,7 +226,10 @@ QString BasicSourcePrinter::printTask(
         }
       }
 
-      // run
+      // Clean callback storage before execution, then run
+      c += fmt::format(
+          "avnd_clean_callback_outputs<{}>({}_cbs); ",
+          wr->typeName(), wr->variable);
       c += wr->execute() + "\n";
 
       process_index++;
@@ -356,40 +384,186 @@ QString BasicSourcePrinter::printDeviceInitialization(const Device& device)
   return str;
 }
 
+void BasicSourcePrinter::analyzeDeviceTypes(
+    const score::DocumentContext& context, const Graph& g)
+{
+  namespace sio = Protocols::SimpleIO;
+  auto& device_list = context.plugin<Explorer::DeviceDocumentPlugin>().list();
+
+  for(auto& [dev_name, paths] : g.merged_addresses)
+  {
+    auto* d = device_list.findDevice(dev_name);
+    if(!d)
+      continue;
+
+    auto proto = qobject_cast<Protocols::SimpleIODevice*>(d);
+    if(!proto)
+      continue;
+
+    const auto& set
+        = proto->settings()
+              .deviceSpecificSettings.value<Protocols::SimpleIOSpecificSettings>();
+
+    QString sanitized_dev = dev_name;
+    ossia::net::sanitize_name(sanitized_dev);
+
+    for(auto& port : set.ports)
+    {
+      std::string variable_name = port.path.split("/").join("_").toStdString();
+      ossia::net::sanitize_name(variable_name);
+
+      std::string key = fmt::format("{}.{}", sanitized_dev.toStdString(), variable_name);
+
+      if(auto ptr = ossia::get_if<sio::Neopixel>(&port.control))
+        model_field_types[key] = "std::vector<float>";
+    }
+  }
+}
+
+// Compute the model accessor for a SimpleIO port, matching the naming in printDataModel
+// E.g. for device "MyBoard", port path "pot1/SIG" -> "ossia_model.MyBoard.pot1_SIG"
+static std::string model_accessor(const QString& device_name, const Protocols::SimpleIO::Port& port)
+{
+  QString dev = device_name;
+  ossia::net::sanitize_name(dev);
+
+  std::string variable_name = port.path.split("/").join("_").toStdString();
+  ossia::net::sanitize_name(variable_name);
+
+  return fmt::format("ossia_model.{}.{}", dev.toStdString(), variable_name);
+}
+
+// Generate init/read/write code for a single SimpleIO device
+static void generateDeviceIO(
+    const QString& dev_name,
+    const Protocols::SimpleIOSpecificSettings& set,
+    std::string& globals,
+    std::string& init,
+    std::string& read,
+    std::string& write)
+{
+  namespace sio = Protocols::SimpleIO;
+
+  for(auto& port : set.ports)
+  {
+    auto acc = model_accessor(dev_name, port);
+
+    if(auto ptr = ossia::get_if<sio::GPIO>(&port.control))
+    {
+      init += fmt::format(
+          "  pinMode({}, {});\n", ptr->line, ptr->direction ? "OUTPUT" : "INPUT");
+
+      if(!ptr->direction) // input
+        read += fmt::format("  {0}.value = digitalRead({1});\n", acc, ptr->line);
+      else // output
+        write += fmt::format(
+            "  if({0}.changed) {{ digitalWrite({1}, {0}.value); {0}.changed = false; }}\n",
+            acc, ptr->line);
+    }
+    else if(auto ptr = ossia::get_if<sio::ADC>(&port.control))
+    {
+      read += fmt::format(
+          "  {0}.value = analogRead({1}) / 4095.f;\n", acc, ptr->channel);
+    }
+    else if(auto ptr = ossia::get_if<sio::PWM>(&port.control))
+    {
+      write += fmt::format(
+          "  if({0}.changed) {{ analogWrite({1}, (int)({0}.value * 255)); {0}.changed = false; }}\n",
+          acc, ptr->channel);
+    }
+    else if(auto ptr = ossia::get_if<sio::DAC>(&port.control))
+    {
+      write += fmt::format(
+          "  if({0}.changed) {{ dacWrite({1}, (int)({0}.value * 255)); {0}.changed = false; }}\n",
+          acc, ptr->channel);
+    }
+    else if(auto ptr = ossia::get_if<sio::Neopixel>(&port.control))
+    {
+      globals += fmt::format(
+          "Adafruit_NeoPixel ossia_neopixel_{0}({1}, {0}, NEO_GRB + NEO_KHZ800);\n",
+          ptr->pin, ptr->num_pixels);
+
+      init += fmt::format("  ossia_neopixel_{}.begin();\n", ptr->pin);
+
+      // Write pixel data from the float array
+      // The array can be: N floats (grayscale) or 3*N floats (RGB per pixel)
+      write += fmt::format(
+          "  if({0}.changed) {{\n"
+          "    auto& pv = {0}.value;\n"
+          "    const int n = {1};\n"
+          "    if((int)pv.size() >= n * 3) {{\n"
+          "      uint8_t* buf = ossia_neopixel_{2}.getPixels();\n"
+          "      for(int i = 0; i < n; i++) {{\n"
+          "        buf[i * 3 + 0] = (uint8_t)(pv[i * 3 + 1] * 255);\n"  // NeoPixel GRB order
+          "        buf[i * 3 + 1] = (uint8_t)(pv[i * 3 + 0] * 255);\n"
+          "        buf[i * 3 + 2] = (uint8_t)(pv[i * 3 + 2] * 255);\n"
+          "      }}\n"
+          "    }} else {{\n"
+          "      int count = ((int)pv.size() < n) ? (int)pv.size() : n;\n"
+          "      for(int i = 0; i < count; i++) {{\n"
+          "        uint8_t v = (uint8_t)(pv[i] * 255);\n"
+          "        ossia_neopixel_{2}.setPixelColor(i, ossia_neopixel_{2}.Color(v, v, v));\n"
+          "      }}\n"
+          "    }}\n"
+          "    ossia_neopixel_{2}.show();\n"
+          "    {0}.changed = false;\n"
+          "  }}\n",
+          acc, ptr->num_pixels, ptr->pin);
+    }
+  }
+}
+
 QString BasicSourcePrinter::printDeviceCommunication(
     const Device& device, const score::DocumentContext& context, const Graph& components)
 {
   auto& device_list = context.plugin<Explorer::DeviceDocumentPlugin>().list();
-  QString file;
-  // ossia_read_pins
+
+  std::string globals;
+  std::string init;
+  std::string read;
+  std::string write;
+  bool has_neopixel = false;
+
+  // Iterate over all device names referenced by the graph's addresses
+  for(auto& [dev_name, paths] : components.merged_addresses)
   {
-    std::string f;
+    auto* d = device_list.findDevice(dev_name);
+    if(!d)
+      continue;
 
-    f += "void ossia_read_pins() {\n";
-    // FIXME codewriter interface on devices
-    for(auto& [devname, paths] : components.in_addresses)
-    {
-      if(auto* d = device_list.findDevice(devname))
-      {
-        if(auto proto = qobject_cast<Protocols::SimpleIODevice*>(d))
-        {
-        }
-      }
-    }
-    for(auto& e : device.ios)
-    {
-      // If device
-    }
+    auto proto = qobject_cast<Protocols::SimpleIODevice*>(d);
+    if(!proto)
+      continue;
 
-    f += "}\n";
+    const auto& set
+        = proto->settings().deviceSpecificSettings.value<Protocols::SimpleIOSpecificSettings>();
+
+    // Check for neopixels
+    for(auto& port : set.ports)
+      if(ossia::get_if<Protocols::SimpleIO::Neopixel>(&port.control))
+        has_neopixel = true;
+
+    generateDeviceIO(dev_name, set, globals, init, read, write);
   }
-  // ossia_read_net
-  // ossia_run_graph
 
-  // ossia_write_pins
-  // ossia_write_net
+  std::string ret;
+  ret += "#pragma once\n";
+  ret += "#include <Arduino.h>\n";
+  if(has_neopixel)
+    ret += "#include <Adafruit_NeoPixel.h>\n";
+  ret += fmt::format(
+      "#include \"{}.ossia-model.generated.hpp\"\n", device.name.toStdString());
+  ret += "\n";
+  ret += globals;
 
-  return file;
+  ret += fmt::format(
+      "\nvoid ossia_init_board() {{\n{}}}\n", init);
+  ret += fmt::format(
+      "\nvoid ossia_read_pins() {{\n{}}}\n", read);
+  ret += fmt::format(
+      "\nvoid ossia_write_pins() {{\n{}}}\n", write);
+
+  return QString::fromStdString(ret);
 }
 
 QString BasicSourcePrinter::printDataModel(const Device& device, const Graph& g)
@@ -402,12 +576,20 @@ QString BasicSourcePrinter::printDataModel(const Device& device, const Graph& g)
   {
     QString structdef = "struct {\n";
 
+    QString sanitized_dev = k;
+    ossia::net::sanitize_name(sanitized_dev);
+
     for(const auto& vv : v)
     {
       std::string variable_name = vv.join("_").toStdString();
       ossia::net::sanitize_name(variable_name);
+
+      std::string key = fmt::format("{}.{}", sanitized_dev.toStdString(), variable_name);
+      auto it = model_field_types.find(key);
+      const char* type = (it != model_field_types.end()) ? it->second.c_str() : "float";
+
       structdef += fmt::format(
-          "struct {{ {0} value = {{}}; bool changed = false; }} {1};\n", "float",
+          "struct {{ {0} value = {{}}; bool changed = false; }} {1};\n", type,
           variable_name);
     }
     structdef += "} ";
@@ -422,13 +604,17 @@ QString BasicSourcePrinter::printDataModel(const Device& device, const Graph& g)
 
   // 3. Generate the accessor functions
 
+  std::string includes;
+  if(!model_field_types.empty())
+    includes += "#include <vector>\n";
+
   return QString::fromStdString(fmt::format(
       R"_(#pragma once
-struct ossia_model_t
+{}struct ossia_model_t
 {{
     {}
 }} ossia_model;
 )_",
-      model_struct.toStdString()));
+      includes, model_struct.toStdString()));
 }
 }

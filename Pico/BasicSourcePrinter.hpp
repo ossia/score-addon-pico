@@ -3,6 +3,8 @@
 #include <Pico/DeviceGraph.hpp>
 #include <Pico/DeviceIO.hpp>
 
+#include <string>
+#include <unordered_map>
 #include <vector>
 namespace Process
 {
@@ -25,5 +27,10 @@ public:
   QString printTask(
       const Device& device, const score::DocumentContext& context,
       const std::vector<Process::ProcessModel*>& procs);
+
+  // Maps "device_name.variable_name" -> C++ value type (default is "float")
+  std::unordered_map<std::string, std::string> model_field_types;
+
+  void analyzeDeviceTypes(const score::DocumentContext& context, const Graph& g);
 };
 }

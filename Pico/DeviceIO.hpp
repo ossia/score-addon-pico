@@ -16,6 +16,7 @@ struct DeviceIO
     GPIO,
     PWM,
     ADC,
+    Neopixel,
   } type{};
   enum Direction
   {

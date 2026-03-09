@@ -375,6 +375,10 @@ public:
       addMember(
           "{} {} = {{\n    {}\n  }};", wr->typeName(), pid, wr->initializer());
 
+      // Initialize dynamic ports (resize port vectors to fixed compile-time size)
+      if(auto post = wr->postInitialize(); !post.empty())
+        addMember("{}", post);
+
       // addCtor("{}.prepare(...)";
 
       // Execution semantics:

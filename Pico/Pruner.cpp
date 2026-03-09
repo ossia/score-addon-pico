@@ -3,7 +3,13 @@
 #include <Scenario/Document/Interval/IntervalModel.hpp>
 #include <Scenario/Process/ScenarioModel.hpp>
 
+#include <Explorer/DocumentPlugin/DeviceDocumentPlugin.hpp>
+
 #include <QFile>
+
+#define OSSIA_PROTOCOL_SIMPLEIO 1
+#include <Protocols/SimpleIO/SimpleIODevice.hpp>
+#include <Protocols/SimpleIO/SimpleIOSpecificSettings.hpp>
 
 #include <Pico/BasicSourcePrinter.hpp>
 #include <Pico/ESPSourcePrinter.hpp>
@@ -12,6 +18,54 @@
 
 namespace Pico
 {
+
+static void populateDeviceIOsFromSimpleIO(
+    Device& dev,
+    const score::DocumentContext& context)
+{
+  auto& device_list = context.plugin<Explorer::DeviceDocumentPlugin>().list();
+  auto* d = device_list.findDevice(dev.name);
+  if(!d)
+    return;
+
+  auto proto = qobject_cast<Protocols::SimpleIODevice*>(d);
+  if(!proto)
+    return;
+
+  const auto& set
+      = proto->settings().deviceSpecificSettings.value<Protocols::SimpleIOSpecificSettings>();
+
+  namespace sio = Protocols::SimpleIO;
+  for(auto& port : set.ports)
+  {
+    if(auto ptr = ossia::get_if<sio::GPIO>(&port.control))
+    {
+      dev.ios.push_back(DeviceIO{
+          .type = DeviceIO::GPIO,
+          .direction = ptr->direction ? DeviceIO::Output : DeviceIO::Input,
+          .pin = ptr->line});
+    }
+    else if(auto ptr = ossia::get_if<sio::PWM>(&port.control))
+    {
+      dev.ios.push_back(DeviceIO{
+          .type = DeviceIO::PWM, .direction = DeviceIO::Output, .pin = ptr->channel});
+    }
+    else if(auto ptr = ossia::get_if<sio::ADC>(&port.control))
+    {
+      dev.ios.push_back(DeviceIO{
+          .type = DeviceIO::ADC, .direction = DeviceIO::Input, .pin = ptr->channel});
+    }
+    else if(auto ptr = ossia::get_if<sio::Neopixel>(&port.control))
+    {
+      DeviceIO io{
+          .type = DeviceIO::Neopixel,
+          .direction = DeviceIO::Output,
+          .pin = ptr->pin};
+      io.properties["num_pixels"] = QString::number(ptr->num_pixels);
+      dev.ios.push_back(std::move(io));
+    }
+  }
+}
 
 ProcessScenario::ProcessScenario(const score::DocumentContext& doc)
     : context{doc}
@@ -57,14 +111,13 @@ ComponentBasedSplit::process(const Scenario::IntervalModel& root)
   for (std::pair<const QString, Device>& device : devices)
   {
     device.second.name = device.first;
-    device.second.ios.push_back(DeviceIO{
-        .type = DeviceIO::ADC, .direction = DeviceIO::Input, .pin = 0});
-    device.second.ios.push_back(DeviceIO{
-        .type = DeviceIO::PWM, .direction = DeviceIO::Output, .pin = 21});
+    populateDeviceIOsFromSimpleIO(device.second, context);
 
     const auto& g = processGraph(context, device.second.processes);
 
     BasicSourcePrinter p;
+    // Analyze SimpleIO port types (neopixel -> vector<float>, etc.)
+    p.analyzeDeviceTypes(context, g);
     // Print the data model
     {
       QString src = p.printDataModel(device.second, g);
